@@ -97,11 +97,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Add CORS middleware to allow frontend access
+#  CORS middleware frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
-    allow_credentials=False,  # Must be False when allow_origins is "*"
+    allow_origins=["*"], 
+    allow_credentials=False,  
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
     expose_headers=["*"],
@@ -109,7 +109,6 @@ app.add_middleware(
 
 
 # CORS PREFLIGHT HANDLER
-# Explicit handler for CORS preflight requests
 @app.options("/{path:path}")
 async def options_handler(path: str):
     """Handle CORS preflight requests for all paths"""

@@ -306,7 +306,7 @@ const QuoteCard: React.FC<QuoteCardProps> = ({ onQuoteUpdate }) => {
           </div>
 
           {/* Metadata */}
-          <div className="flex items-center justify-between text-xs text-slate-500">
+          <div className="flex items-center justify-between text-sm font-bold text-white mt-4">
             <span>Latency: {quote.latency_ms.toFixed(2)}ms</span>
             <span>
               Updated: {new Date(quote.timestamp).toLocaleTimeString()}
