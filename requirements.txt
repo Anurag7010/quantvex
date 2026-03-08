@@ -7,7 +7,6 @@ python-dotenv==1.0.0
 
 # HTTP Client
 httpx==0.25.2
-aiohttp==3.9.1
 
 # WebSocket
 websockets==12.0
@@ -41,6 +40,3 @@ pytest-cov==4.1.0
 # Logging and utilities
 structlog==23.2.0
 tenacity==8.2.3
-
-# OpenAPI
-pyyaml==6.0.1
