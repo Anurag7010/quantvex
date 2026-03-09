@@ -1,0 +1,84 @@
+services:
+  nebula-metad:
+    image: vesoft/nebula-metad:v3.8.0
+    container_name: finance-mcp-nebula-metad
+    command:
+      - --meta_server_addrs=finance-mcp-nebula-metad:9559
+      - --local_ip=finance-mcp-nebula-metad
+      - --ws_ip=finance-mcp-nebula-metad
+      - --port=9559
+      - --data_path=/data/meta
+      - --log_dir=/logs
+      - --v=0
+    volumes:
+      - nebula_metad_data:/data/meta
+      - nebula_metad_logs:/logs
+    networks:
+      - nebula-net
+    restart: unless-stopped
+
+  nebula-storaged:
+    image: vesoft/nebula-storaged:v3.8.0
+    container_name: finance-mcp-nebula-storaged
+    depends_on:
+      - nebula-metad
+    command:
+      - --meta_server_addrs=finance-mcp-nebula-metad:9559
+      - --local_ip=finance-mcp-nebula-storaged
+      - --ws_ip=finance-mcp-nebula-storaged
+      - --port=9779
+      - --data_path=/data/storage
+      - --log_dir=/logs
+      - --v=0
+    volumes:
+      - nebula_storaged_data:/data/storage
+      - nebula_storaged_logs:/logs
+    networks:
+      - nebula-net
+    restart: unless-stopped
+
+  nebula-graphd:
+    image: vesoft/nebula-graphd:v3.8.0
+    container_name: finance-mcp-nebula-graphd
+    depends_on:
+      - nebula-metad
+      - nebula-storaged
+    command:
+      - --meta_server_addrs=finance-mcp-nebula-metad:9559
+      - --local_ip=finance-mcp-nebula-graphd
+      - --ws_ip=finance-mcp-nebula-graphd
+      - --port=9669
+      - --log_dir=/logs
+      - --v=0
+    ports:
+      - "9669:9669"
+    volumes:
+      - nebula_graphd_logs:/logs
+    networks:
+      - nebula-net
+    restart: unless-stopped
+
+  nebula-studio:
+    image: vesoft/nebula-graph-studio:v3.10.0
+    container_name: finance-mcp-nebula-studio
+    depends_on:
+      - nebula-graphd
+    environment:
+      - USER=root
+      - PASSWORD=nebula
+    ports:
+      - "7001:7001"
+    networks:
+      - nebula-net
+    restart: unless-stopped
+
+volumes:
+  nebula_metad_data:
+  nebula_metad_logs:
+  nebula_storaged_data:
+  nebula_storaged_logs:
+  nebula_graphd_logs:
+
+networks:
+  nebula-net:
+    driver: bridge
