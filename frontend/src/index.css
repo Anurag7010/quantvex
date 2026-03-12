@@ -2,17 +2,182 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: #0f172a;
+@layer base {
+  :root {
+    --radius: 1rem;
+    
+    /* Fintech Dark Theme */
+    --background: 11 18 32; /* #0B1220 */
+    --background-alt: 15 23 42; /* #0F172A */
+    --background-card: 17 24 39; /* #111827 */
+    
+    --primary: 37 99 235; /* #2563EB */
+    --primary-hover: 29 78 216; /* #1D4ED8 */
+    --accent: 56 189 248; /* #38BDF8 */
+    
+    --success: 34 197 94; /* #22C55E */
+    --danger: 239 68 68; /* #EF4444 */
+    
+    --text-primary: 229 231 235; /* #E5E7EB */
+    --text-secondary: 148 163 184; /* #94A3B8 */
+    --text-muted: 100 116 139; /* #64748B */
+    
+    --border: 30 41 59; /* #1E293B */
+    --border-light: 51 65 85; /* #334155 */
+    
+    --ring: 37 99 235; /* #2563EB */
+    
+    /* Additional UI colors */
+    --foreground: 229 231 235;
+    --muted: 30 41 59;
+    --muted-foreground: 148 163 184;
+    --card: 17 24 39;
+    --input: 30 41 59;
+  }
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+@layer base {
+  body {
+    margin: 0;
+    font-family: 'Satoshi', 'Geist', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    @apply bg-[rgb(var(--background))] text-[rgb(var(--text-primary))];
+  }
+  
+  code {
+    font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+      monospace;
+  }
+}
+
+/* Glassmorphism utility */
+@layer utilities {
+  .glass {
+    @apply bg-white/[0.02] backdrop-blur-xl border border-white/[0.05];
+  }
+  
+  .glass-hover {
+    @apply hover:bg-white/[0.05] transition-all duration-200;
+  }
+}
+
+/* Animation keyframes */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-glow {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(
+    circle,
+    rgba(143, 171, 212, 0.25) 0%,
+    rgba(74, 112, 169, 0.12) 40%,
+    rgba(0, 0, 0, 0) 70%
+  );
+  filter: blur(120px);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.hero-headline-gradient {
+  background: linear-gradient(90deg, #ffffff 0%, #8FABD4 45%, #ffffff 90%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-fade-up {
+  opacity: 0;
+  animation: fadeUp 0.8s ease forwards;
+}
+
+.animation-delay-1 {
+  animation-delay: 0.12s;
+}
+
+.animation-delay-2 {
+  animation-delay: 0.24s;
+}
+
+.animation-delay-3 {
+  animation-delay: 0.36s;
+}
+
+.hero-primary-button {
+  background: #4A70A9;
+  box-shadow: 0 10px 25px rgba(74, 112, 169, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.hero-secondary-button {
+  background: rgba(143, 171, 212, 0.15);
+  border: 1px solid #8FABD4;
+}
+
+.hero-card {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.hero-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.34);
+  border-color: rgba(143, 171, 212, 0.22);
+}
+
+.fin-panel {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+}
+
+.fade-up {
+  animation: fadeUp 0.6s ease both;
+}
+
+/* Animation for the AI chat */
+.lab-bg::before {
+  overflow: hidden;
+  max-width: 100vw;
+  max-height: 100vh;
+  box-sizing: border-box;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-[rgb(var(--background-alt))];
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-[rgb(var(--border-light))] rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-[rgb(var(--text-muted))];
 }
