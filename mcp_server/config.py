@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
 
+    # NebulaGraph (Phase 2/3 supply-chain graph)
+    nebula_host: str = "finance-mcp-nebula-graphd"
+    nebula_port: int = 9669
+
+    # NewsAPI (Phase 3 news ingestion)
+    news_api_key: str = ""  # Set NEWS_API_KEY in .env — get a free key at newsapi.org
+
     # Security
     mcp_api_key: str = "dev_key_change_in_production"  # Change this in .env for production
 

@@ -6,7 +6,8 @@ from typing import Dict, Any, Optional
 import google.generativeai as genai
 
 from mcp_server.config import get_settings
-from mcp_server.invoke_handlers import handle_quote_latest
+from mcp_server.invoke_handlers import handle_quote_latest, handle_trace_impact
+from mcp_server.invoke_handlers.news_analysis import handle_news_analysis
 from mcp_server.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -48,7 +49,94 @@ class GeminiChatAgent:
                             },
                             required=["symbol"]
                         )
-                    )
+                    ),
+                    genai.protos.FunctionDeclaration(
+                        name="trace_supply_chain_impact",
+                        description=(
+                            "Query the supply-chain knowledge graph to find companies that directly "
+                            "depend on a specific company. Use this ONLY when: "
+                            "(1) the user asks 'who depends on X' or 'what companies depend on X' "
+                            "WITHOUT referencing any current news event, conflict, war, or crisis; AND "
+                            "(2) you already know the exact ticker symbol. "
+                            "DO NOT use this for geopolitical events, wars, sanctions, shortages, "
+                            "factory fires, or anything mentioning a real-world current situation — "
+                            "use analyze_news_impact instead for all those cases."
+                        ),
+                        parameters=genai.protos.Schema(
+                            type=genai.protos.Type.OBJECT,
+                            properties={
+                                "ticker": genai.protos.Schema(
+                                    type=genai.protos.Type.STRING,
+                                    description=(
+                                        "Ticker symbol of the company or commodity at the disruption source. "
+                                        "Examples: TSMC (chips), XOM (oil), CVX (oil), ASML (lithography). "
+                                        "Use uppercase, 1-64 characters, letters/digits/underscore/dot/hyphen only."
+                                    )
+                                ),
+                                "max_hops": genai.protos.Schema(
+                                    type=genai.protos.Type.INTEGER,
+                                    description="How many supply-chain levels deep to traverse. Default 2, maximum 5. Use 3 for broader analysis."
+                                ),
+                            },
+                            required=["ticker"]
+                        )
+                    ),
+                    genai.protos.FunctionDeclaration(
+                        name="analyze_news_impact",
+                        description=(
+                            "Fetch LIVE real-time news about a geopolitical event, conflict, commodity disruption, "
+                            "or supply chain shock — then automatically identify which companies are directly "
+                            "mentioned in the news AND which downstream companies depend on them via the supply "
+                            "chain knowledge graph. Use this tool for ANY question that involves: "
+                            "current events + stock impact, war or conflict + stock, sanctions + companies, "
+                            "commodity shortage (oil, semiconductors, lithium, gas) + stocks, "
+                            "'which stocks will be affected by [event]', 'what happens to [sector] if [event]'. "
+                            "This tool fetches REAL news articles, parses them for disruption signals, writes "
+                            "events to the graph, and returns a full cascade analysis. "
+                            "ALWAYS prefer this over trace_supply_chain_impact when the user mentions a current "
+                            "news event, geopolitical situation, OR asks which stocks are affected by something "
+                            "happening in the real world."
+                        ),
+                        parameters=genai.protos.Schema(
+                            type=genai.protos.Type.OBJECT,
+                            properties={
+                                "query": genai.protos.Schema(
+                                    type=genai.protos.Type.STRING,
+                                    description=(
+                                        "NewsAPI search query to find relevant articles. Be specific: include "
+                                        "country names, company names, commodity types, and event keywords. "
+                                        "Examples: 'Iran USA war oil sanctions 2026', "
+                                        "'China semiconductor export ban chips', "
+                                        "'Taiwan TSMC factory disruption', "
+                                        "'lithium shortage electric vehicles battery', "
+                                        "'Russia gas supply Europe sanctions'."
+                                    )
+                                ),
+                                "limit": genai.protos.Schema(
+                                    type=genai.protos.Type.INTEGER,
+                                    description="Number of news articles to analyze. Default 10, max 20."
+                                ),
+                                "max_hops": genai.protos.Schema(
+                                    type=genai.protos.Type.INTEGER,
+                                    description="Supply chain traversal depth. Default 2, max 5."
+                                ),
+                                "ticker": genai.protos.Schema(
+                                    type=genai.protos.Type.STRING,
+                                    description=(
+                                        "Optional: the company or commodity ticker at the CENTRE of "
+                                        "the disruption. When provided, the graph cascade ALWAYS runs "
+                                        "— even if the news pipeline fails or the NER misses the entity. "
+                                        "Include this whenever the user's question names a specific company. "
+                                        "Examples: TSMC factory fire → ticker='TSMC'; "
+                                        "Iran oil war → ticker='CRUDE_OIL'; "
+                                        "US China chip ban → ticker='TSMC'; "
+                                        "ASML export restrictions → ticker='ASML'."
+                                    )
+                                ),
+                            },
+                            required=["query"]
+                        )
+                    ),
                 ]
             )
         ]
@@ -106,6 +194,183 @@ class GeminiChatAgent:
                 logger.error(f"Tool execution error: {e}")
                 return f"Error executing tool: {str(e)}"
         
+        elif function_name == "trace_supply_chain_impact":
+            ticker = function_args.get("ticker", "")
+            # Gemini returns INTEGER schema values as float (e.g. 2.0).
+            # Cast explicitly so handle_trace_impact's isinstance(max_hops, int) check passes.
+            max_hops = int(function_args.get("max_hops", 2))
+
+            try:
+                result = await handle_trace_impact(
+                    ticker=ticker,
+                    max_hops=max_hops,
+                    agent_id="gemini_chat_agent",
+                )
+
+                if result.success and result.data:
+                    companies = result.data.get("impacted_companies", [])
+                    count = result.data.get("impacted_count", 0)
+                    source_ticker = result.data.get("ticker", ticker.upper())
+                    latency = result.latency_ms
+
+                    if count == 0:
+                        return (
+                            f"No downstream supply-chain dependents found for {source_ticker} "
+                            f"within {max_hops} hop(s). The company may not yet have dependency "
+                            f"edges in the knowledge graph."
+                        )
+
+                    lines = [
+                        f"Supply chain impact from **{source_ticker}** "
+                        f"({count} downstream {'company' if count == 1 else 'companies'} found, "
+                        f"{max_hops} hop{'s' if max_hops != 1 else ''}, {latency:.0f}ms):",
+                        "",
+                    ]
+                    for c in companies:
+                        lines.append(
+                            f"• {c.get('ticker', '?')} — {c.get('name', 'Unknown')} "
+                            f"[{c.get('sector', 'Unknown sector')}]"
+                        )
+                    return "\n".join(lines)
+                else:
+                    return f"Supply chain query failed: {result.error}"
+
+            except Exception as e:
+                logger.error(f"trace_supply_chain_impact error: {e}")
+                return f"Error running supply chain analysis: {str(e)}"
+
+        elif function_name == "analyze_news_impact":
+            query = function_args.get("query", "")
+            limit = int(function_args.get("limit", 10))
+            max_hops = int(function_args.get("max_hops", 2))
+            ticker = function_args.get("ticker") or None
+
+            try:
+                result = await handle_news_analysis(
+                    query=query,
+                    limit=limit,
+                    max_hops=max_hops,
+                    ticker=ticker,
+                    agent_id="gemini_chat_agent",
+                )
+
+                if not result.success:
+                    return f"News analysis failed: {result.error}"
+
+                d = result.data
+                articles = d.get("articles_fetched", 0)
+                events = d.get("events_found", 0)
+                ingested = d.get("events_ingested", 0)
+                direct = d.get("directly_affected", [])
+                cascade = d.get("downstream_cascade", {})
+                total_cascade = d.get("total_cascade_companies", 0)
+                news_events = d.get("news_events", [])
+                latency = result.latency_ms or 0
+
+                # news_available=False means pipeline failed or no articles —
+                # but we may still have cascade data from the ticker anchor.
+                news_available = d.get("news_available", articles > 0)
+                pipeline_error = d.get("pipeline_error")
+                msg_prefix = d.get("message", "")
+
+                if not news_available and total_cascade == 0:
+                    reason = pipeline_error or "no articles matched the query"
+                    suggestion = (
+                        f" You can ask me to 'trace supply chain of {ticker}' "
+                        "to query the graph directly."
+                    ) if ticker else " Try broader search terms or include a ticker."
+                    return (
+                        f"\u26a0\ufe0f No news articles found for \"{query}\" ({reason}).\n"
+                        f"{suggestion}"
+                    )
+
+                # Build name lookup for cascade display
+                ticker_name_map = {
+                    e["ticker"]: e["name"]
+                    for e in direct
+                    if e["type"] == "company"
+                }
+
+                if news_available:
+                    header = (
+                        f"**Live News Impact Analysis** — \"{query}\" ({latency:.0f}ms)\n"
+                        f"Fetched {articles} articles · {events} disruption events detected · "
+                        f"{ingested} written to knowledge graph"
+                    )
+                else:
+                    err_note = f" (news pipeline error: {pipeline_error})" if pipeline_error else " (no matching news)"
+                    header = (
+                        f"**Supply Chain Analysis** — \"{query}\" ({latency:.0f}ms)\n"
+                        f"\u26a0\ufe0f News unavailable{err_note} — showing graph-only cascade for **{ticker or 'provided entities'}**"
+                    )
+
+                lines = [header, ""]
+
+                if news_events:
+                    lines.append("**Disruption signals found in news:**")
+                    for ev in news_events[:5]:
+                        lines.append(
+                            f"• [{ev['event_type'].replace('_',' ').upper()} · "
+                            f"severity {ev['severity']}/10] {ev['headline']}"
+                        )
+                    lines.append("")
+
+                if not direct:
+                    lines.append(
+                        "No specific companies or commodities identified in these articles. "
+                        "The event affects the market broadly or involves entities not yet "
+                        "in the supply chain knowledge graph."
+                    )
+                    return "\n".join(lines)
+
+                # Directly disrupted commodities
+                direct_comms = [e for e in direct if e["type"] == "commodity"]
+                direct_cos = [e for e in direct if e["type"] == "company"]
+
+                if direct_comms:
+                    lines.append("**Commodities directly disrupted:**")
+                    for c in direct_comms:
+                        lines.append(f"• {c['ticker']} — {c['name']}")
+                    lines.append("")
+
+                if direct_cos:
+                    lines.append("**Companies directly mentioned in news:**")
+                    for c in direct_cos:
+                        lines.append(f"• {c['ticker']} — {c['name']}")
+                    lines.append("")
+
+                # Downstream cascade
+                if cascade:
+                    lines.append(
+                        f"**Downstream supply-chain cascade** "
+                        f"({total_cascade} unique companies at risk, {max_hops}-hop traversal):"
+                    )
+                    for source_ticker, dependents in cascade.items():
+                        if dependents:
+                            src_name = ticker_name_map.get(source_ticker, source_ticker)
+                            lines.append(
+                                f"\n  From **{source_ticker}** ({src_name}) disruption "
+                                f"→ {len(dependents)} downstream:"
+                            )
+                            for dep in dependents:
+                                lines.append(
+                                    f"    • {dep.get('ticker','?')} — "
+                                    f"{dep.get('name','Unknown')} "
+                                    f"[{dep.get('sector','Unknown')}]"
+                                )
+                else:
+                    lines.append(
+                        "No downstream cascade found for the directly affected companies. "
+                        "The knowledge graph may not yet contain dependency edges "
+                        "for these entities."
+                    )
+
+                return "\n".join(lines)
+
+            except Exception as e:
+                logger.error(f"analyze_news_impact error: {e}")
+                return f"Error running news impact analysis: {str(e)}"
+
         return f"Unknown function: {function_name}"
     
     async def chat(self, message: str, history: Optional[list] = None) -> str:
@@ -124,20 +389,73 @@ class GeminiChatAgent:
             model = genai.GenerativeModel(
                 model_name="gemini-2.5-flash",
                 tools=self.tools,
-                system_instruction="""You are a helpful financial assistant with access to real-time market data.
-                
-When users ask about stock prices, crypto values, or market data:
-1. Use the get_stock_quote tool to fetch current prices
-2. Provide clear, concise analysis of the data
-3. All prices are returned in Indian Rupees (₹)
-4. Be professional and factual
+                system_instruction="""You are a financial intelligence assistant powered by a real-time supply-chain knowledge graph.
 
-Common symbol mappings:
-- Apple = AAPL, Microsoft = MSFT, Google = GOOGL
-- Amazon = AMZN, Tesla = TSLA, NVIDIA = NVDA
-- Bitcoin = BTCUSDT, Ethereum = ETHUSDT, Solana = SOLUSDT
+You have three tools. Choose the correct one every time:
 
-Always use tools to get real data - never make up prices."""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOOL 1 — get_stock_quote
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+USE FOR: current price, stock value, crypto price, market quote, how is X performing.
+NEVER fabricate prices — always call this tool.
+Prices must be shown in Indian Rupees (₹). Convert: price_usd × 89.94.
+
+Symbol mappings:
+  Apple→AAPL  Microsoft→MSFT  Google→GOOGL  Amazon→AMZN  Tesla→TSLA
+  NVIDIA→NVDA  Qualcomm→QCOM  Intel→INTC  AMD→AMD  TSMC→TSMC
+  ExxonMobil→XOM  Chevron→CVX  Shell→SHEL  BP→BP
+  Bitcoin→BTCUSDT  Ethereum→ETHUSDT  Solana→SOLUSDT
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOOL 2 — analyze_news_impact  ← USE THIS FOR ALL EVENTS AND DISRUPTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+USE FOR (MANDATORY for these patterns):
+  ✓ Any war, conflict, sanctions, embargo, military action
+  ✓ Any factory shutdown, explosion, natural disaster affecting a company
+  ✓ Any commodity shortage: oil, semiconductors, lithium, gas, rare earth
+  ✓ Any geopolitical crisis: Taiwan, Iran, Russia, China trade war
+  ✓ "which stocks are affected by [X]"
+  ✓ "what companies will be hurt if [event]"
+  ✓ "impact of [event] on stocks"
+
+This tool fetches LIVE news, identifies disrupted entities, writes to the graph,
+then traverses the full supply-chain cascade.
+
+CRITICAL — always set ticker when you know the company or commodity:
+  "TSMC factory fire"         → query="Taiwan TSMC factory fire semiconductor", ticker="TSMC"
+  "Iran USA war oil"          → query="Iran USA war oil supply disruption", ticker="CRUDE_OIL"
+  "US China semiconductor ban"→ query="US China chip semiconductor export ban", ticker="TSMC"
+  "ASML export restrictions"  → query="ASML export restriction lithography EUV", ticker="ASML"
+  "lithium shortage"          → query="lithium shortage supply battery EV", ticker="ALB"
+  "Russia Ukraine gas war"    → query="Russia Ukraine war natural gas supply", ticker="NATURAL_GAS"
+  "Taiwan crisis chips"       → query="Taiwan strait crisis semiconductor production", ticker="TSMC"
+  "oil supply disruption"     → query="oil supply disruption Middle East OPEC", ticker="CRUDE_OIL"
+
+Setting ticker = the central company/commodity VID guarantees the graph cascade
+runs even if no news articles match — making results robust.
+
+Use max_hops=2 (default) for most queries; max_hops=3 for broader analysis.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOOL 3 — trace_supply_chain_impact
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+USE FOR: ONLY when user asks "who depends on X" in a static/academic sense,
+with no mention of a real event, war, or crisis.
+Example: "Show me all companies that depend on TSMC in the graph."
+
+DO NOT use this tool if the user's question mentions:
+  ✗ any war, conflict, crisis, shutdown, shortage, disruption
+  ✗ any current news event or geopolitical situation
+In those cases, use analyze_news_impact instead.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AFTER RECEIVING TOOL RESULTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Explain the business rationale for each affected company:
+  • Why is this company at risk? What does it depend on?
+  • What sector is it in? What is the economic chain?
+  • Quantify the exposure where possible.
+Be analytical, professional, and concise."""
             )
             
             # Start or continue chat

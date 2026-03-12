@@ -66,6 +66,87 @@
                     "status": {"type": "string"}
                 }
             }
+        },
+        {
+            "name": "trace_impact",
+            "description": "Find all companies that are downstream supply-chain dependents of a given company. Use this to assess which companies are affected when a supplier experiences a disruption (e.g. factory outage, commodity shortage).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "ticker": {
+                        "type": "string",
+                        "description": "Ticker symbol of the company that suffered the supply disruption (e.g. TSMC, LITHIUM). Allowed characters: A-Z, 0-9, underscore, dot, hyphen. Max 64 characters."
+                    },
+                    "max_hops": {
+                        "type": "integer",
+                        "description": "Maximum number of supply-chain hops to traverse. Must be between 1 and 5. Default is 2.",
+                        "default": 2,
+                        "minimum": 1,
+                        "maximum": 5
+                    }
+                },
+                "required": ["ticker"]
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "ticker": {"type": "string"},
+                    "max_hops": {"type": "integer"},
+                    "impacted_companies": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "ticker": {"type": "string"},
+                                "name": {"type": "string"},
+                                "sector": {"type": "string"}
+                            }
+                        }
+                    },
+                    "impacted_count": {"type": "integer"}
+                }
+            }
+        },
+        {
+            "name": "analyze_news_impact",
+            "description": "Fetch live news about a geopolitical event, conflict, or commodity disruption, parse disruption signals, write events to the supply chain knowledge graph, and return the full downstream impact cascade. Use for any real-world event + stock impact questions.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "NewsAPI search query. Include country names, commodity types, and event keywords. E.g. 'Iran USA war oil sanctions 2026'."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Number of news articles to fetch and analyze. Default 10, max 20.",
+                        "default": 10,
+                        "minimum": 1,
+                        "maximum": 20
+                    },
+                    "max_hops": {
+                        "type": "integer",
+                        "description": "Supply chain traversal depth. Default 2, max 5.",
+                        "default": 2,
+                        "minimum": 1,
+                        "maximum": 5
+                    }
+                },
+                "required": ["query"]
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "articles_fetched": {"type": "integer"},
+                    "events_found": {"type": "integer"},
+                    "events_ingested": {"type": "integer"},
+                    "news_events": {"type": "array"},
+                    "directly_affected": {"type": "array"},
+                    "downstream_cascade": {"type": "object"},
+                    "total_cascade_companies": {"type": "integer"}
+                }
+            }
         }
     ],
     "connectors": [

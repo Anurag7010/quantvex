@@ -1,7 +1,4 @@
-"""
-Finance MCP Server - FastAPI Application
 
-"""
 import json
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -19,7 +16,9 @@ from mcp_server.invoke_handlers import (
     handle_quote_latest,
     handle_quote_stream,
     handle_unsubscribe,
-    get_active_subscriptions
+    get_active_subscriptions,
+    handle_trace_impact,
+    handle_news_analysis,
 )
 from cache.redis_client import get_redis_client
 from cache.qdrant_client import get_semantic_cache
@@ -199,11 +198,27 @@ async def invoke_tool(request: ToolInvocation):
                 channel=args.get("channel", "trades"),
                 agent_id=request.agent_id
             )
-        
+
+        elif tool_name == "trace_impact":
+            response = await handle_trace_impact(
+                ticker=args.get("ticker"),
+                max_hops=args.get("max_hops", 2),
+                agent_id=request.agent_id,
+            )
+
+        elif tool_name == "analyze_news_impact":
+            response = await handle_news_analysis(
+                query=args.get("query", ""),
+                limit=args.get("limit", 10),
+                max_hops=args.get("max_hops", 2),
+                ticker=args.get("ticker") or None,
+                agent_id=request.agent_id,
+            )
+
         else:
             response = ToolResponse(
                 success=False,
-                error=f"Unknown tool: {tool_name}. Available tools: quote.latest, quote.stream"
+                error=f"Unknown tool: {tool_name}. Available tools: quote.latest, quote.stream, trace_impact, analyze_news_impact"
             )
         
         if response.success:

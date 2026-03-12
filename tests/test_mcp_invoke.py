@@ -11,10 +11,13 @@ from mcp_server.server import app
 from mcp_server.schemas import QuoteData, DataSource
 
 
+API_KEY = "dev_key_change_in_production"
+
+
 @pytest.fixture
 def client():
-    """Create test client"""
-    return TestClient(app)
+    """Create test client with API key header pre-set"""
+    return TestClient(app, headers={"X-API-Key": API_KEY})
 
 
 class TestMCPMetadata:
@@ -179,7 +182,7 @@ class TestSubscriptionEndpoints:
             mock_connector.subscribe.return_value = "sub_12345678"
             mock_bn.return_value = mock_connector
             
-            response = client.post("/subscribe", json=payload)
+            response = client.post("/subscribe", json=payload, headers={"X-API-Key": API_KEY})
         
         assert response.status_code in [200, 400, 500]
     
@@ -189,9 +192,9 @@ class TestSubscriptionEndpoints:
             "subscription_id": "unknown_sub_id"
         }
         
-        response = client.post("/unsubscribe", json=payload)
+        response = client.post("/unsubscribe", json=payload, headers={"X-API-Key": API_KEY})
         data = response.json()
-        
+
         assert data["success"] == False
     
     def test_list_subscriptions(self, client):

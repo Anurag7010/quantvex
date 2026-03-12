@@ -366,6 +366,29 @@ TRACE_IMPACT: str = (
     "RETURN DISTINCT id(impacted) AS impacted_ticker, "
     "impacted.Company.name AS name, impacted.Company.sector AS sector"
 )
+
+FIND_COMPANIES_REQUIRING_COMMODITY: str = (
+    "MATCH (c:Company)-[:REQUIRES]->(com:Commodity) "
+    "WHERE id(com) == $commodity_id "
+    "RETURN id(c) AS ticker, c.Company.name AS name, c.Company.sector AS sector"
+)
+"""
+Find all Company vertices that directly require a given commodity.
+
+Used to propagate a commodity-level supply shock (e.g. crude oil shortage
+from geopolitical conflict) to the companies that depend on that commodity,
+before tracing their downstream DEPENDS_ON cascade.
+
+nGQL parameter
+--------------
+$commodity_id : str — Commodity VID, e.g. ``"CRUDE_OIL"`` or ``"SEMICONDUCTOR"``
+
+Result columns
+--------------
+ticker  : str — Company VID
+name    : str — company full name
+sector  : str — GICS sector
+"""
 """
 Find all Company vertices that transitively depend on a target company.
 

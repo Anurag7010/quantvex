@@ -20,6 +20,9 @@ qdrant-client==1.7.0
 # Neo4j Graph DB
 neo4j==5.15.0
 
+# NebulaGraph (Phase 2/3 supply-chain graph)
+nebula3-python>=3.4.0
+
 # Sentence Transformers for embeddings (pinned compatible versions)
 sentence-transformers==2.7.0
 torch==2.2.0

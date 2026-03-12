@@ -67,6 +67,9 @@ services:
       - "8000:8000"
     env_file:
       - ../.env
+    environment:
+      - NEBULA_HOST=finance-mcp-nebula-graphd
+      - NEBULA_PORT=9669
     depends_on:
       redis:
         condition: service_healthy
@@ -76,6 +79,7 @@ services:
         condition: service_healthy
     networks:
       - finance-mcp-net
+      - nebula-net
     restart: unless-stopped
 
 volumes:
@@ -87,3 +91,6 @@ volumes:
 networks:
   finance-mcp-net:
     driver: bridge
+  nebula-net:
+    external: true
+    name: infra_nebula-net

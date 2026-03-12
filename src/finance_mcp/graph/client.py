@@ -28,6 +28,7 @@ SECURITY MODEL
 """
 
 import logging
+import os
 import re
 import ssl
 from contextlib import contextmanager
@@ -46,8 +47,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Defaults — override via constructor arguments or environment variables
 # ---------------------------------------------------------------------------
-DEFAULT_HOST: str = "127.0.0.1"
-DEFAULT_PORT: int = 9669
+DEFAULT_HOST: str = os.environ.get("NEBULA_HOST", "127.0.0.1")
+DEFAULT_PORT: int = int(os.environ.get("NEBULA_PORT", "9669"))
 GRAPH_SPACE: str = "supply_chain"
 AGENT_USER: str = "mcp_agent"
 AGENT_PASSWORD: str = "mcp_agent_secret"
@@ -586,6 +587,55 @@ class SecureGraphClient:
         )
         return impacted
 
+    def find_companies_requiring(self, commodity_id: str) -> List[Dict[str, Any]]:
+        """
+        Find all Company vertices that directly require a given commodity.
+
+        Used to propagate a commodity-level disruption (e.g. crude oil
+        shortage caused by geopolitical conflict) to the set of companies
+        that depend on that commodity before tracing their downstream
+        DEPENDS_ON cascade.
+
+        Parameters
+        ----------
+        commodity_id : str
+            Commodity VID, e.g. ``"CRUDE_OIL"`` or ``"SEMICONDUCTOR"``.
+            Must match the VID pattern ``[A-Za-z0-9_.-]{1,64}``.
+
+        Returns
+        -------
+        list[dict]
+            Each element is ``{"ticker": str, "name": str, "sector": str}``.
+            Returns an empty list when no companies require the commodity.
+
+        Raises
+        ------
+        ValueError
+            When ``commodity_id`` fails VID validation.
+        RuntimeError
+            When the graph engine reports an execution error.
+        """
+        _validate_vid(commodity_id, "commodity_id")
+        rs = self._execute(
+            queries.FIND_COMPANIES_REQUIRING_COMMODITY,
+            {"commodity_id": commodity_id},
+        )
+        companies: list = []
+        for i in range(rs.row_size()):
+            row = rs.row_values(i)
+            companies.append(
+                {
+                    "ticker": row[0].as_string(),
+                    "name":   row[1].as_string(),
+                    "sector": row[2].as_string(),
+                }
+            )
+        logger.info(
+            "find_companies_requiring: commodity=%r found=%d",
+            commodity_id, len(companies),
+        )
+        return companies
+
     def insert_company(
         self,
         ticker: str,
@@ -726,5 +776,67 @@ class SecureGraphClient:
         )
         logger.info(
             "upsert_event: upserted VID=%r severity=%d", event_id, severity
+        )
+        return True
+
+    def insert_depends_on(
+        self,
+        src_ticker: str,
+        dst_ticker: str,
+        weight: float = 1.0,
+    ) -> bool:
+        """
+        Insert a DEPENDS_ON edge from src_ticker to dst_ticker.
+
+        Parameters
+        ----------
+        src_ticker : str — the dependent company VID (e.g. "AAPL")
+        dst_ticker : str — the supplier company VID  (e.g. "TSMC")
+        weight     : float — dependency strength 0.0–1.0
+        """
+        _validate_vid(src_ticker, "src_ticker")
+        _validate_vid(dst_ticker, "dst_ticker")
+        if not isinstance(weight, (int, float)) or not (0.0 <= weight <= 1.0):
+            raise ValueError("weight must be a float between 0.0 and 1.0")
+        # NebulaGraph 3.x does not support $params in VID positions for INSERT EDGE.
+        # VIDs are validated by _validate_vid (only [A-Za-z0-9_.-], max 64 chars)
+        # so embedding them as double-quoted string literals is injection-safe.
+        query = (
+            f'INSERT EDGE IF NOT EXISTS DEPENDS_ON(weight) '
+            f'VALUES "{src_ticker}"->"{dst_ticker}":($weight)'
+        )
+        self._execute(query, {"weight": float(weight)})
+        logger.info(
+            "insert_depends_on: %r -> %r weight=%.2f", src_ticker, dst_ticker, weight
+        )
+        return True
+
+    def insert_requires(
+        self,
+        ticker: str,
+        commodity_id: str,
+        volume: int = 0,
+    ) -> bool:
+        """
+        Insert a REQUIRES edge from a Company to a Commodity.
+
+        Parameters
+        ----------
+        ticker       : str — Company VID
+        commodity_id : str — Commodity VID
+        volume       : int — annual demand volume
+        """
+        _validate_vid(ticker, "ticker")
+        _validate_vid(commodity_id, "commodity_id")
+        if not isinstance(volume, int) or volume < 0:
+            raise ValueError("volume must be a non-negative integer")
+        # VIDs embedded as validated literals — see insert_depends_on comment.
+        query = (
+            f'INSERT EDGE IF NOT EXISTS REQUIRES(volume) '
+            f'VALUES "{ticker}"->"{commodity_id}":($volume)'
+        )
+        self._execute(query, {"volume": volume})
+        logger.info(
+            "insert_requires: %r -> %r volume=%d", ticker, commodity_id, volume
         )
         return True
