@@ -11,8 +11,8 @@ logger = get_logger(__name__)
 
 
 class Neo4jClient:
-    """Neo4j client for lineage and relationship graph operations"""
-    
+    """Neo4j client for lineage and relationship graph operations."""
+
     def __init__(self):
         settings = get_settings()
         self._driver = GraphDatabase.driver(
@@ -62,8 +62,6 @@ class Neo4jClient:
         if self._driver:
             self._driver.close()
             logger.info("neo4j_disconnected")
-    
-    # ==================== NODE OPERATIONS ====================
     
     def create_api_node(self, name: str, api_type: str, base_url: str) -> bool:
         """Create an API node"""

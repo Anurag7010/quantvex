@@ -13,14 +13,13 @@ logger = get_logger(__name__)
 
 
 class LineageWriter:
-    """Writes lineage information to Neo4j graph database"""
-    
+    """Writes data lineage events to Neo4j."""
+
     def __init__(self):
         self._client = get_neo4j_client()
         self._initialized = False
     
     def initialize(self) -> bool:
-        """Initialize the lineage writer and create base nodes"""
         try:
             if not self._client.connect():
                 return False

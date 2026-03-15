@@ -54,7 +54,10 @@ def section(title: str) -> None:
 # ── helpers ─────────────────────────────────────────────────────────────────
 
 QUERY = "semiconductor disruption"
-_NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "6963f6cb67c740599a02a596a04a1ff7")
+_NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "")
+if not _NEWS_API_KEY:
+    print("Error: NEWS_API_KEY environment variable is not set.")
+    sys.exit(1)
 
 # ── Step 1 — full pipeline run ───────────────────────────────────────────────
 

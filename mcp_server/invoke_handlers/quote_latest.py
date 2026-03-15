@@ -27,15 +27,10 @@ async def handle_quote_latest(
     query_text: Optional[str] = None
 ) -> ToolResponse:
     """
-    Handle quote.latest tool invocation
-    
-    Flow:
-    1. Check semantic cache for similar queries
-    2. Check Redis hot cache
-    3. If cache miss or stale, call connectors with fallback
-    4. Update caches
-    5. Record lineage
-    6. Return normalized response
+    Handle quote.latest invocation.
+
+    Cache waterfall: Qdrant semantic cache → Redis hot cache → live connectors.
+    Falls back through Finnhub → Alpha Vantage → Binance (crypto only).
     """
     start_time = time.time()
     settings = get_settings()
@@ -53,12 +48,10 @@ async def handle_quote_latest(
             max_age_sec=max_age_sec
         )
         
-        # Initialize clients
         redis_client = get_redis_client()
         semantic_cache = get_semantic_cache()
         lineage_writer = get_lineage_writer()
-        
-        # 1. Check semantic cache first
+
         if query_text:
             semantic_hit = semantic_cache.search_similar(
                 query_text=query_text,
@@ -85,7 +78,6 @@ async def handle_quote_latest(
                     latency_ms=latency_ms
                 )
         
-        # 2. Check Redis hot cache
         if redis_client.is_connected():
             if redis_client.is_snapshot_fresh(symbol, max_age_sec):
                 quote = redis_client.get_snapshot(symbol)
@@ -106,7 +98,6 @@ async def handle_quote_latest(
                         latency_ms=latency_ms
                     )
         
-        # 3. Cache miss - fetch from connectors with fallback
         quote = await _fetch_with_fallback(symbol, exchange)
         
         if not quote:
@@ -117,11 +108,9 @@ async def handle_quote_latest(
                 latency_ms=latency_ms
             )
         
-        # 4. Update Redis cache
         if redis_client.is_connected():
             redis_client.set_snapshot(quote)
-        
-        # 5. Update semantic cache
+
         if query_text and agent_id:
             semantic_cache.store_response(
                 agent_id=agent_id,
@@ -130,7 +119,6 @@ async def handle_quote_latest(
                 response_text=json.dumps(_quote_to_dict(quote))
             )
         
-        # 6. Record lineage
         if agent_id:
             lineage_writer.record_quote_fetch(quote, agent_id)
         
@@ -172,17 +160,10 @@ async def handle_quote_latest(
 
 
 async def _fetch_with_fallback(symbol: str, exchange: Optional[str] = None) -> Optional[QuoteData]:
-    """
-    Fetch quote from connectors with fallback chain:
-    1. Finnhub (faster, more rate limit)
-    2. Alpha Vantage (slower, less rate limit)
-    3. Binance (for crypto only)
-    """
+    """Cascade through Binance (crypto) → Finnhub → Alpha Vantage."""
     
-    # Detect if crypto symbol
     is_crypto = any(x in symbol.upper() for x in ["USDT", "BTC", "ETH", "BNB"])
-    
-    # Try Binance first for crypto
+
     if is_crypto:
         try:
             from connectors.binance_ws import get_binance_connector
@@ -198,8 +179,7 @@ async def _fetch_with_fallback(symbol: str, exchange: Optional[str] = None) -> O
                 )
         except Exception as e:
             logger.warning("binance_fallback_failed", error=str(e))
-    
-    # Try Finnhub
+
     try:
         finnhub = get_finnhub_connector()
         quote = await finnhub.get_quote(symbol)
@@ -207,8 +187,7 @@ async def _fetch_with_fallback(symbol: str, exchange: Optional[str] = None) -> O
             return quote
     except Exception as e:
         logger.warning("finnhub_fallback_failed", error=str(e))
-    
-    # Try Alpha Vantage as last resort
+
     try:
         av = get_alpha_vantage_connector()
         quote = await av.get_quote(symbol)

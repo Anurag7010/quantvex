@@ -14,12 +14,11 @@ class InputValidator:
     SYMBOL_PATTERN = re.compile(r'^[A-Z0-9]{1,20}$', re.IGNORECASE)
     EXCHANGE_PATTERN = re.compile(r'^[A-Z0-9_]{1,20}$', re.IGNORECASE)
     
-    VALID_TOOLS = {"quote.latest", "quote.stream"}
+    VALID_TOOLS = {"quote.latest", "quote.stream", "trace_impact", "analyze_news_impact"}
     VALID_CHANNELS = {"trades", "quotes"}
     
     @classmethod
     def validate_symbol(cls, symbol: str) -> str:
-        """Validate and normalize symbol"""
         if not symbol:
             raise ValueError("Symbol cannot be empty")
         
@@ -33,7 +32,6 @@ class InputValidator:
     
     @classmethod
     def validate_exchange(cls, exchange: Optional[str]) -> Optional[str]:
-        """Validate and normalize exchange"""
         if not exchange:
             return None
         
@@ -46,7 +44,6 @@ class InputValidator:
     
     @classmethod
     def validate_tool_name(cls, tool_name: str) -> str:
-        """Validate tool name"""
         if not tool_name:
             raise ValueError("Tool name cannot be empty")
         
@@ -59,7 +56,6 @@ class InputValidator:
     
     @classmethod
     def validate_channel(cls, channel: str) -> str:
-        """Validate stream channel"""
         if not channel:
             return "trades"
         
@@ -72,7 +68,6 @@ class InputValidator:
     
     @classmethod
     def validate_max_age_sec(cls, max_age_sec: Optional[int]) -> int:
-        """Validate max age seconds"""
         if max_age_sec is None:
             return 60
         
@@ -86,7 +81,6 @@ class InputValidator:
     
     @classmethod
     def sanitize_string(cls, value: str) -> str:
-        """Remove potentially harmful characters"""
         if not value:
             return ""
         

@@ -10,21 +10,14 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 from mcp_server.config import get_settings
 from mcp_server.utils.logging import get_logger
 from mcp_server.schemas import QuoteData, DataSource
+from connectors.exceptions import RateLimitError
 
 logger = get_logger(__name__)
 
 
-class RateLimitError(Exception):
-    """Rate limit exceeded"""
-    pass
-
-
 class FinnhubConnector:
-    """
-    Finnhub REST API connector
-    Free tier: 60 API calls/minute
-    """
-    
+    """Finnhub REST API connector. Free tier: 60 calls/min."""
+
     BASE_URL = "https://finnhub.io/api/v1"
     
     def __init__(self):
@@ -35,11 +28,9 @@ class FinnhubConnector:
         self._min_interval = 1.0  # 60 calls/minute max
     
     async def close(self):
-        """Close the HTTP client"""
         await self._client.aclose()
-    
+
     def _respect_rate_limit(self):
-        """Ensure minimum interval between calls"""
         elapsed = time.time() - self._last_call_time
         if elapsed < self._min_interval:
             sleep_time = self._min_interval - elapsed
@@ -53,10 +44,6 @@ class FinnhubConnector:
         retry=retry_if_exception_type((httpx.HTTPError, RateLimitError))
     )
     async def get_quote(self, symbol: str) -> Optional[QuoteData]:
-        """
-        Fetch latest quote for a symbol
-        Uses /quote endpoint for current price
-        """
         self._respect_rate_limit()
         start_time = time.time()
         

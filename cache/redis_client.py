@@ -14,8 +14,8 @@ logger = get_logger(__name__)
 
 
 class RedisClient:
-    """Redis client for snapshot caching and stream ingestion"""
-    
+    """Redis client for snapshot caching and stream ingestion."""
+
     SNAPSHOT_PREFIX = "snapshot:"
     STREAM_PREFIX = "stream:"
     
@@ -30,7 +30,6 @@ class RedisClient:
         self._connected = False
     
     def connect(self) -> bool:
-        """Test connection to Redis"""
         try:
             self._client.ping()
             self._connected = True
@@ -52,13 +51,7 @@ class RedisClient:
             self._connected = False
             return False
     
-    # ==================== SNAPSHOT OPERATIONS ====================
-    
     def get_snapshot(self, symbol: str) -> Optional[QuoteData]:
-        """
-        Get cached snapshot for a symbol
-        Returns None if not found or expired
-        """
         key = f"{self.SNAPSHOT_PREFIX}{symbol.upper()}"
         
         try:
@@ -86,7 +79,6 @@ class RedisClient:
             return None
     
     def set_snapshot(self, quote: QuoteData) -> bool:
-        """Store snapshot for a symbol"""
         key = f"{self.SNAPSHOT_PREFIX}{quote.symbol.upper()}"
         
         try:
@@ -136,8 +128,6 @@ class RedisClient:
         if age is None:
             return False
         return age < max_age_sec
-    
-    # ==================== STREAM OPERATIONS ====================
     
     def add_to_stream(self, tick: StreamTick) -> Optional[str]:
         """

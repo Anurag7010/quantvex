@@ -87,7 +87,6 @@ async def lifespan(app: FastAPI):
     redis_client.close()
 
 
-#  FastAPI app
 settings = get_settings()
 app = FastAPI(
     title=settings.mcp_server_name,
@@ -96,7 +95,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-#  CORS middleware frontend access
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -107,10 +105,9 @@ app.add_middleware(
 )
 
 
-# CORS PREFLIGHT HANDLER
 @app.options("/{path:path}")
 async def options_handler(path: str):
-    """Handle CORS preflight requests for all paths"""
+    """Handle CORS preflight requests."""
     return Response(
         status_code=200,
         headers={
@@ -122,14 +119,9 @@ async def options_handler(path: str):
     )
 
 
-# MCP ENDPOINTS
-
 @app.get("/.well-known/mcp")
 async def mcp_metadata():
-    """
-    MCP metadata endpoint
-    Returns server information and protocol version
-    """
+    """MCP server metadata and protocol version."""
     return {
         "name": settings.mcp_server_name,
         "version": settings.mcp_server_version,
@@ -147,9 +139,7 @@ async def mcp_metadata():
 
 @app.get("/capabilities")
 async def get_capabilities():
-    """
-    Returns available MCP tools and connectors
-    """
+    """Available MCP tools and their input/output schemas."""
     try:
         with open(CAPABILITIES_PATH, "r") as f:
             capabilities = json.load(f)
@@ -164,15 +154,7 @@ async def get_capabilities():
 
 @app.post("/invoke", dependencies=[Security(get_api_key)])
 async def invoke_tool(request: ToolInvocation):
-    """
-    Execute an MCP tool
-    
-    Supported tools:
-    - quote.latest: Get latest price quote
-    - quote.stream: Subscribe to real-time stream
-    
-    Requires X-API-Key header
-    """
+    """Execute an MCP tool. Requires X-API-Key header."""
     logger.info(
         "invoke_request",
         tool=request.tool_name,
@@ -242,11 +224,7 @@ async def invoke_tool(request: ToolInvocation):
 
 @app.post("/subscribe", dependencies=[Security(get_api_key)])
 async def subscribe(request: SubscriptionRequest):
-    """
-    Subscribe to a real-time stream
-    
-    Requires X-API-Key header
-    """
+    """Subscribe to a real-time symbol stream. Requires X-API-Key header."""
     logger.info(
         "subscribe_request",
         symbol=request.symbol,
@@ -282,11 +260,7 @@ class UnsubscribeRequest(BaseModel):
 
 @app.post("/unsubscribe", dependencies=[Security(get_api_key)])
 async def unsubscribe(request: UnsubscribeRequest):
-    """
-    Unsubscribe from a stream
-    
-    Requires X-API-Key header
-    """
+    """Unsubscribe from a stream. Requires X-API-Key header."""
     logger.info("unsubscribe_request", subscription_id=request.subscription_id)
     
     try:
@@ -308,8 +282,6 @@ async def unsubscribe(request: UnsubscribeRequest):
         )
 
 
-# AI CHAT ENDPOINT
-
 class ChatRequest(BaseModel):
     message: str
 
@@ -322,12 +294,7 @@ class ChatResponse(BaseModel):
 
 @app.post("/chat", dependencies=[Security(get_api_key)])
 async def chat(request: ChatRequest):
-    """
-    Chat with Gemini AI agent
-    
-    The agent has access to real-time financial data through MCP tools.
-    Requires X-API-Key header
-    """
+    """Chat with the Gemini AI agent. Requires X-API-Key header."""
     if not GEMINI_AVAILABLE:
         return JSONResponse(
             status_code=503,
@@ -352,8 +319,7 @@ async def chat(request: ChatRequest):
     except Exception as e:
         logger.error(f"Chat endpoint error: {e}")
         error_msg = str(e)
-        
-        #  common Gemini errors
+
         if "429" in error_msg or "quota" in error_msg.lower():
             error_msg = "The Gemini API quota has been exceeded. Please try again in a few moments or check your API billing settings."
         elif "401" in error_msg or "authentication" in error_msg.lower():
@@ -371,11 +337,8 @@ async def chat(request: ChatRequest):
         )
 
 
-#  UTILITY ENDPOINTS 
-
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
     redis_client = get_redis_client()
     
     return {
@@ -387,13 +350,10 @@ async def health_check():
 
 @app.get("/subscriptions")
 async def list_subscriptions():
-    """List active subscriptions"""
     return {
         "subscriptions": get_active_subscriptions()
     }
 
-
-#  ERROR HANDLERS 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
