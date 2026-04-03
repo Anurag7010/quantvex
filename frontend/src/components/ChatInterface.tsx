@@ -9,6 +9,113 @@ interface Message {
   timestamp: Date;
 }
 
+const formatInline = (text: string) => {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={i} className="font-semibold text-white">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return <React.Fragment key={i}>{part}</React.Fragment>;
+  });
+};
+
+const formatText = (text: string) => {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const blocks: React.ReactNode[] = [];
+  let idx = 0;
+  let paragraphBuffer: string[] = [];
+  let listBuffer: Array<{ content: string; level: number }> = [];
+
+  const flushParagraph = () => {
+    if (!paragraphBuffer.length) return;
+    const content = paragraphBuffer.join(" ").trim();
+    paragraphBuffer = [];
+    if (!content) return;
+    blocks.push(
+      <p
+        key={`p-${idx++}`}
+        className="mb-3 text-sm leading-relaxed text-slate-100"
+      >
+        {formatInline(content)}
+      </p>,
+    );
+  };
+
+  const flushList = () => {
+    if (!listBuffer.length) return;
+    const items = listBuffer;
+    listBuffer = [];
+    blocks.push(
+      <ul key={`ul-${idx++}`} className="mb-3 space-y-2">
+        {items.map((item, i) => (
+          <li
+            key={`li-${idx}-${i}`}
+            className="text-sm leading-relaxed text-slate-100"
+            style={{ marginLeft: `${Math.min(item.level, 3) * 14}px` }}
+          >
+            <span className="mr-2 text-slate-300">•</span>
+            {formatInline(item.content)}
+          </li>
+        ))}
+      </ul>,
+    );
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+    const headingMatch = line.match(/^\s{0,3}(#{1,6})\s+(.+)$/);
+    const bulletMatch = line.match(/^(\s*)[*-]\s+(.+)$/);
+
+    if (!line.trim()) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+
+    if (headingMatch) {
+      flushParagraph();
+      flushList();
+      const level = headingMatch[1].length;
+      const headingText = headingMatch[2].trim();
+      const classMap: Record<number, string> = {
+        1: "text-2xl font-bold mt-4 mb-3 text-white",
+        2: "text-xl font-bold mt-4 mb-3 text-white",
+        3: "text-lg font-semibold mt-3 mb-2 text-white",
+        4: "text-base font-semibold mt-3 mb-2 text-white",
+        5: "text-sm font-semibold mt-2 mb-1 text-white",
+        6: "text-sm font-semibold mt-2 mb-1 text-white",
+      };
+      const Tag = `h${Math.min(level, 6)}` as React.ElementType;
+      blocks.push(
+        <Tag key={`h-${idx++}`} className={classMap[Math.min(level, 6)]}>
+          {formatInline(headingText)}
+        </Tag>,
+      );
+      continue;
+    }
+
+    if (bulletMatch) {
+      flushParagraph();
+      const indentSpaces = bulletMatch[1].length;
+      const level = Math.floor(indentSpaces / 2);
+      listBuffer.push({ content: bulletMatch[2].trim(), level });
+      continue;
+    }
+
+    flushList();
+    paragraphBuffer.push(line.trim());
+  }
+
+  flushParagraph();
+  flushList();
+
+  return blocks;
+};
+
 const ChatInterface: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -150,9 +257,13 @@ const ChatInterface: React.FC = () => {
                     : "bg-slate-700 text-slate-100"
                 }`}
               >
-                <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                  {message.content}
-                </p>
+                {message.role === "user" ? (
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed">
+                    {message.content}
+                  </p>
+                ) : (
+                  <div className="text-sm">{formatText(message.content)}</div>
+                )}
               </div>
               <p className="text-xs text-slate-500 mt-1 px-2">
                 {message.timestamp.toLocaleTimeString()}

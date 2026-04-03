@@ -6,6 +6,7 @@ interface NavbarHeroProps {
   heroTitle?: string;
   heroDescription?: string;
   backgroundImage?: string;
+  videobackground?: string;
   onNavigateChat?: () => void;
   onNavigateDashboard?: () => void;
 }
@@ -15,6 +16,7 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
   heroTitle = "AI-Powered Market Intelligence",
   heroDescription = "A real-time financial analysis platform combining live market data, knowledge-graph reasoning, and AI-driven supply-chain intelligence.",
   backgroundImage = "/earth-bg.png",
+  videobackground = "/bd-video.mp4",
   onNavigateChat,
   onNavigateDashboard,
 }) => {
@@ -29,9 +31,12 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
       style={{ fontFamily: '"Satoshi", "Geist", "Inter", sans-serif' }}
     >
       <div className="fixed inset-0 overflow-hidden bg-black">
-        <img
-          src={backgroundImage}
-          alt="Earth from space at night"
+        <video
+          src={videobackground}
+          autoPlay
+          loop
+          muted
+          playsInline
           className="absolute inset-0 h-full w-full object-cover"
         />
 

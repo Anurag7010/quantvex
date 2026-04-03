@@ -2,6 +2,8 @@
 Gemini Chat Agent for MCP Server
 """
 import asyncio
+import sys
+from pathlib import Path
 from typing import Dict, Any, Optional
 import google.generativeai as genai
 
@@ -10,10 +12,53 @@ from mcp_server.invoke_handlers import handle_quote_latest, handle_trace_impact
 from mcp_server.invoke_handlers.news_analysis import handle_news_analysis
 from mcp_server.utils.logging import get_logger
 
+# Add examples to path for formatter access
+sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
+from finance_formatter import format_financial_report
+
 logger = get_logger(__name__)
 
 # Exchange rate for INR conversion
 USD_TO_INR = 89.94
+
+
+def _normalize_quote(symbol: str, result: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize MCP quote payload into INR fields for formatter."""
+    base_symbol = (symbol or "").upper() or "N/A"
+    
+    if not result.get("success"):
+        return {"symbol": base_symbol, "error": result.get("error", "Unknown error")}
+    
+    data = result.get("data", {})
+    
+    def to_inr(value: Optional[float]) -> Optional[float]:
+        return round(value * USD_TO_INR, 2) if value is not None else None
+    
+    price = to_inr(data.get("price"))
+    prev = to_inr(data.get("previous_close"))
+    open_px = to_inr(data.get("open"))
+    high = to_inr(data.get("high"))
+    low = to_inr(data.get("low"))
+    
+    change = None
+    change_pct = None
+    if price is not None and prev not in (None, 0):
+        change = round(price - prev, 2)
+        change_pct = round((change / prev) * 100, 2)
+    
+    return {
+        "symbol": data.get("symbol", base_symbol).upper(),
+        "price": price,
+        "previous_close": prev,
+        "open": open_px,
+        "high": high,
+        "low": low,
+        "volume": data.get("volume"),
+        "change": change,
+        "change_pct": change_pct,
+        "data_source": data.get("data_source", "Real-time market data via MCP financial server"),
+        "cache_state": "cached" if data.get("cache_hit") else "fresh",
+    }
 
 
 class GeminiChatAgent:
@@ -160,35 +205,12 @@ class GeminiChatAgent:
                 if hasattr(result, 'model_dump'):
                     result = result.model_dump()
                 
-                if result.get("success") and result.get("data"):
-                    data = result["data"]
-                    price = data.get("price", 0)
-                    price_inr = price * USD_TO_INR
-                    
-                    response = f"Symbol: {data.get('symbol', symbol)}\\n"
-                    response += f"Price: ₹{price_inr:,.2f}\\n"
-                    response += f"Source: {data.get('data_source', 'unknown')} ({'cached' if data.get('cache_hit') else 'fresh'})\\n"
-                    
-                    if data.get("open"):
-                        response += f"Open: ₹{(data['open'] * USD_TO_INR):,.2f}\\n"
-                    if data.get("high"):
-                        response += f"High: ₹{(data['high'] * USD_TO_INR):,.2f}\\n"
-                    if data.get("low"):
-                        response += f"Low: ₹{(data['low'] * USD_TO_INR):,.2f}\\n"
-                    if data.get("previous_close"):
-                        prev = data["previous_close"]
-                        prev_inr = prev * USD_TO_INR
-                        change = price - prev
-                        change_inr = change * USD_TO_INR
-                        pct = (change / prev) * 100 if prev else 0
-                        response += f"Previous Close: ₹{prev_inr:,.2f}\\n"
-                        response += f"Change: ₹{change_inr:+,.2f} ({pct:+.2f}%)\\n"
-                    if data.get("volume"):
-                        response += f"Volume: {data['volume']:,.0f}\\n"
-                    
-                    return response
-                else:
-                    return f"Error fetching quote: {result.get('error', 'Unknown error')}"
+                # Normalize quote to formatter structure
+                normalized_quote = _normalize_quote(symbol, result)
+                
+                # Use formatter for professional output
+                formatted_response = format_financial_report({"quotes": [normalized_quote]})
+                return formatted_response
             
             except Exception as e:
                 logger.error(f"Tool execution error: {e}")
@@ -221,7 +243,7 @@ class GeminiChatAgent:
                         )
 
                     lines = [
-                        f"Supply chain impact from **{source_ticker}** "
+                        f"Supply chain impact from {source_ticker} "
                         f"({count} downstream {'company' if count == 1 else 'companies'} found, "
                         f"{max_hops} hop{'s' if max_hops != 1 else ''}, {latency:.0f}ms):",
                         "",
@@ -293,21 +315,21 @@ class GeminiChatAgent:
 
                 if news_available:
                     header = (
-                        f"**Live News Impact Analysis** — \"{query}\" ({latency:.0f}ms)\n"
+                        f"Live News Impact Analysis — \"{query}\" ({latency:.0f}ms)\n"
                         f"Fetched {articles} articles · {events} disruption events detected · "
                         f"{ingested} written to knowledge graph"
                     )
                 else:
                     err_note = f" (news pipeline error: {pipeline_error})" if pipeline_error else " (no matching news)"
                     header = (
-                        f"**Supply Chain Analysis** — \"{query}\" ({latency:.0f}ms)\n"
-                        f"\u26a0\ufe0f News unavailable{err_note} — showing graph-only cascade for **{ticker or 'provided entities'}**"
+                        f"Supply Chain Analysis — \"{query}\" ({latency:.0f}ms)\n"
+                        f"\u26a0\ufe0f News unavailable{err_note} — showing graph-only cascade for {ticker or 'provided entities'}"
                     )
 
                 lines = [header, ""]
 
                 if news_events:
-                    lines.append("**Disruption signals found in news:**")
+                    lines.append("Disruption signals found in news:")
                     for ev in news_events[:5]:
                         lines.append(
                             f"• [{ev['event_type'].replace('_',' ').upper()} · "
@@ -328,13 +350,13 @@ class GeminiChatAgent:
                 direct_cos = [e for e in direct if e["type"] == "company"]
 
                 if direct_comms:
-                    lines.append("**Commodities directly disrupted:**")
+                    lines.append("Commodities directly disrupted:")
                     for c in direct_comms:
                         lines.append(f"• {c['ticker']} — {c['name']}")
                     lines.append("")
 
                 if direct_cos:
-                    lines.append("**Companies directly mentioned in news:**")
+                    lines.append("Companies directly mentioned in news:")
                     for c in direct_cos:
                         lines.append(f"• {c['ticker']} — {c['name']}")
                     lines.append("")
@@ -342,14 +364,14 @@ class GeminiChatAgent:
                 # Downstream cascade
                 if cascade:
                     lines.append(
-                        f"**Downstream supply-chain cascade** "
+                        f"Downstream supply-chain cascade "
                         f"({total_cascade} unique companies at risk, {max_hops}-hop traversal):"
                     )
                     for source_ticker, dependents in cascade.items():
                         if dependents:
                             src_name = ticker_name_map.get(source_ticker, source_ticker)
                             lines.append(
-                                f"\n  From **{source_ticker}** ({src_name}) disruption "
+                                f"\n  From {source_ticker} ({src_name}) disruption "
                                 f"→ {len(dependents)} downstream:"
                             )
                             for dep in dependents:
@@ -455,7 +477,9 @@ Explain the business rationale for each affected company:
   • Why is this company at risk? What does it depend on?
   • What sector is it in? What is the economic chain?
   • Quantify the exposure where possible.
-Be analytical, professional, and concise."""
+Be analytical, professional, and concise.
+
+You SHOULD use professional Markdown formatting. Use **bold** for company names, headers for sections, and bullet points for lists to make the output easy to read."""
             )
             
             # Start or continue chat
