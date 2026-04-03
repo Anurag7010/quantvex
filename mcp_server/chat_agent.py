@@ -10,6 +10,7 @@ import google.generativeai as genai
 from mcp_server.config import get_settings
 from mcp_server.invoke_handlers import handle_quote_latest, handle_trace_impact
 from mcp_server.invoke_handlers.news_analysis import handle_news_analysis
+from mcp_server.invoke_handlers.multi_agent_analysis import handle_multi_agent_analysis
 from mcp_server.utils.logging import get_logger
 
 # Add examples to path for formatter access
@@ -177,6 +178,30 @@ class GeminiChatAgent:
                                         "US China chip ban → ticker='TSMC'; "
                                         "ASML export restrictions → ticker='ASML'."
                                     )
+                                ),
+                            },
+                            required=["query"]
+                        )
+                    ),
+                    genai.protos.FunctionDeclaration(
+                        name="multi_agent_analysis",
+                        description=(
+                            "Run a structured multi-agent financial debate (bull vs bear) and "
+                            "produce a balanced final verdict. Use this for impact-analysis "
+                            "questions such as: 'what will happen to stocks if...', 'is this "
+                            "bullish or bearish', geopolitical effects, and macro risk/reward "
+                            "trade-off scenarios."
+                        ),
+                        parameters=genai.protos.Schema(
+                            type=genai.protos.Type.OBJECT,
+                            properties={
+                                "query": genai.protos.Schema(
+                                    type=genai.protos.Type.STRING,
+                                    description="Natural-language market impact question."
+                                ),
+                                "ticker": genai.protos.Schema(
+                                    type=genai.protos.Type.STRING,
+                                    description="Optional anchor ticker for focused analysis."
                                 ),
                             },
                             required=["query"]
@@ -393,6 +418,77 @@ class GeminiChatAgent:
                 logger.error(f"analyze_news_impact error: {e}")
                 return f"Error running news impact analysis: {str(e)}"
 
+        elif function_name == "multi_agent_analysis":
+            query = function_args.get("query", "")
+            ticker = function_args.get("ticker") or None
+
+            try:
+                result = await handle_multi_agent_analysis(
+                    query=query,
+                    ticker=ticker,
+                    agent_id="gemini_chat_agent",
+                )
+
+                if not result.success or not result.data:
+                    return f"Multi-agent analysis failed: {result.error}"
+
+                d = result.data
+                bull_case = d.get("bull_case", {})
+                bear_case = d.get("bear_case", {})
+                final_verdict = d.get("final_verdict", "No verdict")
+                confidence = float(d.get("confidence", 0.0))
+                summary = d.get("summary", "")
+                key_drivers = d.get("key_drivers", [])
+
+                lines = [
+                    "📊 Multi-Agent Market Analysis",
+                    "",
+                    "🟢 Bull Case:",
+                    bull_case.get("reasoning", "No bullish evidence available."),
+                ]
+
+                bull_signals = bull_case.get("signals") or []
+                if bull_signals:
+                    lines.append("Signals:")
+                    lines.extend([f"• {s}" for s in bull_signals])
+                lines.append(
+                    f"Confidence: {int(float(bull_case.get('confidence', 0.0)) * 100)}%"
+                )
+                lines.append("")
+
+                lines.extend([
+                    "🔴 Bear Case:",
+                    bear_case.get("reasoning", "No bearish evidence available."),
+                ])
+                bear_signals = bear_case.get("signals") or []
+                if bear_signals:
+                    lines.append("Signals:")
+                    lines.extend([f"• {s}" for s in bear_signals])
+                lines.append(
+                    f"Confidence: {int(float(bear_case.get('confidence', 0.0)) * 100)}%"
+                )
+                lines.append("")
+
+                lines.extend([
+                    "⚖️ Final Verdict:",
+                    final_verdict,
+                ])
+                if summary:
+                    lines.append(summary)
+
+                if key_drivers:
+                    lines.append("Key Drivers:")
+                    lines.extend([f"• {driver}" for driver in key_drivers])
+
+                lines.append("")
+                lines.append(f"Confidence: {int(confidence * 100)}%")
+
+                return "\n".join(lines)
+
+            except Exception as e:
+                logger.error(f"multi_agent_analysis error: {e}")
+                return f"Error running multi-agent analysis: {str(e)}"
+
         return f"Unknown function: {function_name}"
     
     async def chat(self, message: str, history: Optional[list] = None) -> str:
@@ -413,7 +509,7 @@ class GeminiChatAgent:
                 tools=self.tools,
                 system_instruction="""You are a financial intelligence assistant powered by a real-time supply-chain knowledge graph.
 
-You have three tools. Choose the correct one every time:
+You have four tools. Choose the correct one every time:
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TOOL 1 — get_stock_quote
@@ -469,6 +565,21 @@ DO NOT use this tool if the user's question mentions:
   ✗ any war, conflict, crisis, shutdown, shortage, disruption
   ✗ any current news event or geopolitical situation
 In those cases, use analyze_news_impact instead.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOOL 4 — multi_agent_analysis
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+USE FOR: any balanced risk/reward reasoning question where the user asks for
+an outlook, verdict, or bull-vs-bear framing.
+
+MANDATORY for patterns like:
+    ✓ "is this bullish or bearish"
+    ✓ "what will happen to stocks if..."
+    ✓ "impact of X on markets / sector / stocks"
+    ✓ geopolitical effects with both upside and downside channels
+
+This tool runs a structured Bull Agent + Bear Agent + Judge synthesis and
+returns a final verdict with confidence.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 AFTER RECEIVING TOOL RESULTS

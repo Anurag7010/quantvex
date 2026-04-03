@@ -94,6 +94,9 @@ paths:
 
         ### quote.stream
         Subscribe to real-time price stream (crypto only via Binance).
+
+        ### multi_agent_analysis
+        Run orchestrated bull vs bear market reasoning with a judge synthesis.
       operationId: invokeTool
       requestBody:
         required: true
@@ -347,6 +350,9 @@ components:
           enum:
             - quote.latest
             - quote.stream
+            - trace_impact
+            - analyze_news_impact
+            - multi_agent_analysis
         arguments:
           type: object
           description: Tool-specific arguments

@@ -19,6 +19,7 @@ from mcp_server.invoke_handlers import (
     get_active_subscriptions,
     handle_trace_impact,
     handle_news_analysis,
+    handle_multi_agent_analysis,
 )
 from cache.redis_client import get_redis_client
 from cache.qdrant_client import get_semantic_cache
@@ -197,10 +198,20 @@ async def invoke_tool(request: ToolInvocation):
                 agent_id=request.agent_id,
             )
 
+        elif tool_name == "multi_agent_analysis":
+            response = await handle_multi_agent_analysis(
+                query=args.get("query", ""),
+                ticker=args.get("ticker") or None,
+                agent_id=request.agent_id,
+            )
+
         else:
             response = ToolResponse(
                 success=False,
-                error=f"Unknown tool: {tool_name}. Available tools: quote.latest, quote.stream, trace_impact, analyze_news_impact"
+                error=(
+                    f"Unknown tool: {tool_name}. Available tools: quote.latest, "
+                    "quote.stream, trace_impact, analyze_news_impact, multi_agent_analysis"
+                )
             )
         
         if response.success:

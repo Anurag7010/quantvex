@@ -14,7 +14,13 @@ class InputValidator:
     SYMBOL_PATTERN = re.compile(r'^[A-Z0-9]{1,20}$', re.IGNORECASE)
     EXCHANGE_PATTERN = re.compile(r'^[A-Z0-9_]{1,20}$', re.IGNORECASE)
     
-    VALID_TOOLS = {"quote.latest", "quote.stream", "trace_impact", "analyze_news_impact"}
+    VALID_TOOLS = {
+        "quote.latest",
+        "quote.stream",
+        "trace_impact",
+        "analyze_news_impact",
+        "multi_agent_analysis",
+    }
     VALID_CHANNELS = {"trades", "quotes"}
     
     @classmethod

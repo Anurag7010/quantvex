@@ -147,6 +147,37 @@
                     "total_cascade_companies": {"type": "integer"}
                 }
             }
+        },
+        {
+            "name": "multi_agent_analysis",
+            "description": "Run bull vs bear financial reasoning and return a final verdict.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Natural language impact-analysis question."
+                    },
+                    "ticker": {
+                        "type": "string",
+                        "description": "Optional anchor ticker for focused analysis."
+                    }
+                },
+                "required": ["query"]
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "ticker": {"type": ["string", "null"]},
+                    "bull_case": {"type": "object"},
+                    "bear_case": {"type": "object"},
+                    "final_verdict": {"type": "string"},
+                    "confidence": {"type": "number"},
+                    "summary": {"type": "string"},
+                    "key_drivers": {"type": "array"}
+                }
+            }
         }
     ],
     "connectors": [
