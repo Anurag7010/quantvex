@@ -62,6 +62,34 @@ def _normalize_quote(symbol: str, result: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _dedupe_points(items: list[str], min_points: int = 3) -> list[str]:
+    unique: list[str] = []
+    seen = set()
+    for item in items:
+        cleaned = " ".join(str(item).split()).strip()
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(cleaned)
+
+    while len(unique) < min_points:
+        unique.append("Signal coverage is currently limited; monitor incoming market updates.")
+
+    return unique[:max(min_points, 5)]
+
+
+def _outlook_from_verdict(verdict: str) -> str:
+    text = (verdict or "").lower()
+    if "bull" in text:
+        return "Bullish"
+    if "bear" in text:
+        return "Bearish"
+    return "Mixed"
+
+
 class GeminiChatAgent:
     """Gemini-powered chat agent with MCP tool access"""
     
@@ -440,48 +468,93 @@ class GeminiChatAgent:
                 summary = d.get("summary", "")
                 key_drivers = d.get("key_drivers", [])
 
+                resolved_ticker = d.get("ticker") or ticker or "MARKET"
+                outlook = _outlook_from_verdict(final_verdict)
+
+                bull_signals = _dedupe_points(list(bull_case.get("signals") or []), min_points=3)
+                bear_signals = _dedupe_points(list(bear_case.get("signals") or []), min_points=3)
+                insight_points = _dedupe_points([
+                    *list(key_drivers or []),
+                    f"Final verdict bias: {final_verdict}",
+                    f"Net confidence spread: {abs(float(bull_case.get('confidence', 0.0)) - float(bear_case.get('confidence', 0.0))) * 100:.0f}%",
+                ], min_points=3)
+
+                bull_rationale = str(bull_case.get("reasoning", "Bull-side conviction is currently data-limited.")).strip()
+                bear_rationale = str(bear_case.get("reasoning", "Bear-side conviction is currently data-limited.")).strip()
+
+                # Optional market price enrichment for the Market Data section.
+                current_price = "N/A"
+                trend_insight = "Directional view is based on signal balance rather than direct price momentum."
+                try:
+                    if isinstance(resolved_ticker, str) and resolved_ticker and resolved_ticker.isalnum():
+                        quote = await handle_quote_latest(
+                            symbol=resolved_ticker,
+                            max_age_sec=60,
+                            agent_id="gemini_chat_agent",
+                            query_text=f"Get quote for {resolved_ticker}",
+                        )
+                        if quote.success and quote.data and quote.data.get("price") is not None:
+                            current_price = f"${float(quote.data['price']):.2f}"
+                            trend_insight = (
+                                "Price context supports measured risk budgeting while watching catalyst volatility."
+                                if outlook != "Bearish"
+                                else "Price context warrants defensive positioning until risk catalysts stabilize."
+                            )
+                except Exception as quote_exc:  # noqa: BLE001
+                    logger.warning(f"multi_agent_analysis quote enrichment failed: {quote_exc}")
+
+                summary_lines = [s.strip() for s in str(summary).split(".") if s.strip()][:3]
+                if not summary_lines:
+                    summary_lines = [
+                        "Risk and upside signals are both present across current evidence.",
+                        "Portfolio stance should align with confidence and catalyst timing.",
+                    ]
+
                 lines = [
-                    "📊 Multi-Agent Market Analysis",
+                    f"## 📊 Multi-Agent Market Analysis — {resolved_ticker}",
                     "",
-                    "🟢 Bull Case:",
-                    bull_case.get("reasoning", "No bullish evidence available."),
+                    "### ⚖️ Final Verdict",
+                    f"- **Outlook:** {outlook}",
+                    f"- **Confidence:** {int(confidence * 100)}%",
+                    "- **Summary:**",
                 ]
-
-                bull_signals = bull_case.get("signals") or []
-                if bull_signals:
-                    lines.append("Signals:")
-                    lines.extend([f"• {s}" for s in bull_signals])
-                lines.append(
-                    f"Confidence: {int(float(bull_case.get('confidence', 0.0)) * 100)}%"
-                )
-                lines.append("")
+                lines.extend([f"  {line}." if not line.endswith(".") else f"  {line}" for line in summary_lines])
 
                 lines.extend([
-                    "🔴 Bear Case:",
-                    bear_case.get("reasoning", "No bearish evidence available."),
+                    "",
+                    "---",
+                    "",
+                    "### 🟢 Bull Case",
+                    "**Key Drivers:**",
                 ])
-                bear_signals = bear_case.get("signals") or []
-                if bear_signals:
-                    lines.append("Signals:")
-                    lines.extend([f"• {s}" for s in bear_signals])
-                lines.append(
-                    f"Confidence: {int(float(bear_case.get('confidence', 0.0)) * 100)}%"
-                )
-                lines.append("")
-
+                lines.extend([f"- {point}" for point in bull_signals[:3]])
                 lines.extend([
-                    "⚖️ Final Verdict:",
-                    final_verdict,
+                    "",
+                    "**Rationale:**",
+                    bull_rationale,
+                    "",
+                    "---",
+                    "",
+                    "### 🔴 Bear Case",
+                    "**Key Risks:**",
                 ])
-                if summary:
-                    lines.append(summary)
-
-                if key_drivers:
-                    lines.append("Key Drivers:")
-                    lines.extend([f"• {driver}" for driver in key_drivers])
-
-                lines.append("")
-                lines.append(f"Confidence: {int(confidence * 100)}%")
+                lines.extend([f"- {point}" for point in bear_signals[:3]])
+                lines.extend([
+                    "",
+                    "**Rationale:**",
+                    bear_rationale,
+                    "",
+                    "---",
+                    "",
+                    "### 📈 Market Data",
+                    f"- **Current Price:** {current_price}",
+                    f"- **Trend Insight:** {trend_insight}",
+                    "",
+                    "---",
+                    "",
+                    "### 🔍 Key Insights",
+                ])
+                lines.extend([f"- {point}" for point in insight_points[:3]])
 
                 return "\n".join(lines)
 
@@ -580,6 +653,13 @@ MANDATORY for patterns like:
 
 This tool runs a structured Bull Agent + Bear Agent + Judge synthesis and
 returns a final verdict with confidence.
+
+When TOOL 4 is used, keep the response in strict markdown sections with:
+    - one H2 title line
+    - H3 section headers
+    - bullet lists for drivers/risks/insights
+    - no duplicate sentences
+    - concise analyst-report style wording
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 AFTER RECEIVING TOOL RESULTS

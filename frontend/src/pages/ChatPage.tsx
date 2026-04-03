@@ -3,6 +3,7 @@ import { AnimatedAIChat } from "../components/ui/animated-ai-chat";
 import { Send, Bot, User, Loader2, ArrowRight } from "lucide-react";
 import { mcpApi, ChatResponse } from "../services/api";
 import { useNavigate } from "react-router-dom";
+import { StructuredAnalysisMessage } from "../components/analysis";
 
 interface Message {
   id: string;
@@ -160,7 +161,11 @@ const ChatPage: React.FC = () => {
                       : "fin-panel text-white/90"
                   }`}
                 >
-                  <p className="whitespace-pre-wrap">{message.content}</p>
+                  {message.role === "assistant" ? (
+                    <StructuredAnalysisMessage content={message.content} />
+                  ) : (
+                    <p className="whitespace-pre-wrap">{message.content}</p>
+                  )}
                 </div>
                 <p className="mt-2 text-xs text-white/50">
                   {message.timestamp.toLocaleTimeString()}
@@ -176,11 +181,11 @@ const ChatPage: React.FC = () => {
               </div>
               <div className="fin-panel inline-flex items-center gap-3 px-4 py-3 text-sm text-white/80">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Finance MCP is analyzing market data
-                <span className="flex gap-1">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/60" />
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/60 [animation-delay:0.2s]" />
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/60 [animation-delay:0.4s]" />
+                <span>Analyzing market signals</span>
+                <span className="typing-dots" aria-hidden="true">
+                  <span>.</span>
+                  <span>.</span>
+                  <span>.</span>
                 </span>
               </div>
             </div>

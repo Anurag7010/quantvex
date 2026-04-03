@@ -604,7 +604,7 @@ const DashboardPage: React.FC = () => {
               <div className="space-y-6">
                 <div className="space-y-2">
                   <p className="text-xs uppercase tracking-[0.2em] text-white/60">
-                    Selected Asset
+                    Price
                   </p>
                   <div className="text-3xl font-semibold">
                     {quoteInrPrice ? formatINR(quoteInrPrice) : "--"}
@@ -613,15 +613,11 @@ const DashboardPage: React.FC = () => {
                     {quoteData?.symbol || "Awaiting symbol search"}
                   </div>
                   {quoteData ? (
-                    <p className="text-xs text-white/60">
-                      Approx {formatUSD(quoteData.price)} USD
+                    <p className="text-sm text-white/60">
+                      {formatUSD(quoteData.price)} USD
                     </p>
                   ) : null}
-                  {quoteData ? (
-                    <p className="text-xs text-white/50">
-                      Converted using live USD to INR rate
-                    </p>
-                  ) : null}
+                  {quoteData ? <p className="text-xs text-white/50"></p> : null}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 text-sm">
