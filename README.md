@@ -1,97 +1,176 @@
 # Finance MCP
 
-A real-time financial data platform built around the [Model Context Protocol (MCP)]. It exposes market data tools that any MCP-compatible LLM agent can call, and ships with a React frontend that provides both a direct quote search interface and a conversational AI chat mode powered by Google Gemini.
+Deterministic financial intelligence system that combines MCP tool execution, supply-chain graph traversal, event ingestion, and multi-agent reasoning.
 
-## Features
+## Overview
 
-- **MCP Protocol Server**: Standardised tool invocation (`/invoke`) with streaming subscriptions for any MCP-compatible client.
-- **Real-Time Market Data**: Live stock and crypto quotes via Alpha Vantage, Finnhub, and Binance WebSocket.
-- **AI Chat Mode**: Natural-language interface backed by Gemini function calling — the model decides which MCP tools to call.
-- **Search Mode**: Direct symbol lookup with 5-second auto-refresh and intraday range visualisation.
-- **Two-Tier Cache**: Redis hot cache (TTL-based) and Qdrant semantic vector cache for near-instant repeat queries.
-- **Data Lineage**: Neo4j graph tracks every API call, instrument, and agent interaction for full provenance.
-- **News Impact Analysis**: NewsAPI → NER keyword extraction → NebulaGraph knowledge graph for supply-chain event tracing.
+Finance MCP is a full-stack system for market analysis.
+It serves real-time quote tools, computes dependency impact through a graph model, ingests external disruption events, and synthesizes outputs through a bull/bear/judge reasoning pipeline.
 
-## Architecture
+The system is built to answer financial impact questions with tool-grounded responses rather than free-form model speculation.
+
+## Key Capabilities
+
+- Real-time quote retrieval across equities and crypto via provider fallback and cache waterfall.
+- Deterministic multi-hop impact tracing over supply-chain dependencies.
+- Event-driven impact analysis from live news ingestion into graph memory.
+- Structured multi-agent reasoning with confidence-scored verdicts.
+- Chat and dashboard frontend for analysis workflows.
+
+## System Architecture
 
 ```
-Browser / LLM Agent
-             │
-             ▼
-React Frontend (TypeScript)        ← Search & Chat UI
-             │
-             ▼
-MCP Server  (FastAPI / Python 3.11)
-    ├─ /invoke          ← tool dispatch (quote.latest, quote.stream, trace_impact, analyze_news_impact)
-    ├─ /subscribe       ← SSE streaming subscription
-    ├─ /chat            ← Gemini agent endpoint
-    │
-    ├─ Connectors       ← Alpha Vantage · Finnhub · Binance WebSocket
-    ├─ Redis            ← hot quote cache
-    ├─ Qdrant           ← semantic query cache (all-MiniLM-L6-v2)
-    ├─ Neo4j            ← data lineage graph
-    └─ NebulaGraph      ← news event & supply-chain knowledge graph
+Browser (Chat/Dashboard)
+        |
+        v
+React Frontend
+        |
+        v
+MCP Server (FastAPI)
+  |          |             |             |
+  v          v             v             v
+Connectors   Cache         Graph         Reasoning
+(AV/FH/BN) (Redis/Qdrant) (Neo4j/Nebula) (Bull/Bear/Judge)
 ```
 
-## Project Structure
+Flow summary:
+
+1. Frontend sends a request to `/chat` or `/invoke`.
+2. MCP server dispatches to a tool handler.
+3. Handler reads from cache and external providers or graph stores.
+4. Response is returned as structured JSON to frontend.
+
+## Core Components
+
+### MCP Server
+
+`mcp_server/server.py` exposes:
+
+- `POST /invoke` for tool execution.
+- `POST /subscribe` and `POST /unsubscribe` for streaming lifecycle.
+- `POST /chat` for Gemini-driven tool orchestration.
+- `GET /capabilities` and `GET /health` for discovery and checks.
+
+Implemented tools:
+
+- `quote.latest`
+- `quote.stream`
+- `trace_impact`
+- `analyze_news_impact`
+- `multi_agent_analysis`
+
+### Graph Layer
+
+- NebulaGraph (`src/finance_mcp/graph`) stores companies, dependencies, commodities, and event relationships.
+- `trace_impact` executes bounded multi-hop traversal with input validation and parameterized query execution.
+- Neo4j (`graph/`) stores lineage metadata for API/tool interactions.
+
+### News Ingestion Pipeline
+
+`src/finance_mcp/ingestion/pipeline.py` orchestrates:
+
+- NewsAPI fetch via `NewsClient`.
+- Disruption/entity extraction via `EventParser`.
+- Graph writes via `EventIngestor`.
+
+This pipeline powers `analyze_news_impact` by linking external events to downstream dependency cascades.
+
+### Multi-Agent Reasoning Engine
+
+`src/finance_mcp/reasoning/orchestrator.py` runs:
+
+- Bull agent for upside thesis.
+- Bear agent for risk thesis.
+- Judge agent for final synthesis.
+
+Output includes bull case, bear case, verdict, confidence, and key drivers.
+
+### Frontend
+
+`frontend/` provides:
+
+- Chat experience for natural-language queries backed by MCP tools.
+- Dashboard for quote retrieval and market context visualization.
+
+## How It Works (Execution Flow)
+
+Example query: "Which companies depend on TSMC?"
+
+1. User submits query in chat UI.
+2. Frontend calls `POST /chat`.
+3. Chat agent selects and executes `trace_supply_chain_impact` tool mapping to backend `trace_impact` handler.
+4. Handler validates ticker and hop bounds.
+5. NebulaGraph traversal returns impacted downstream companies.
+6. Chat agent formats structured response for the UI.
+
+Example quote flow:
+
+1. Frontend calls `POST /invoke` with `tool_name=quote.latest`.
+2. Handler checks semantic cache (Qdrant), then hot cache (Redis).
+3. On miss, handler falls back across providers (Finnhub, Alpha Vantage, Binance for crypto).
+4. Result is returned and optionally persisted back to cache and lineage graph.
+
+## Repository Structure
 
 ```
 finance-mcp/
-├── mcp_server/             # FastAPI application — routing, auth, lifespan
-│   ├── invoke_handlers/    # One module per MCP tool
-│   └── utils/              # Validation, logging helpers
-├── connectors/             # Alpha Vantage, Finnhub, Binance integrations
-├── cache/                  # Redis and Qdrant client wrappers
-├── graph/                  # Neo4j lineage writer and client
-├── src/finance_mcp/        # NebulaGraph client, news ingestion pipeline
-├── frontend/               # React 19 + TypeScript SPA
-├── infra/                  # Primary Docker Compose (Redis/Qdrant/Neo4j/MCP)
-├── docker/                 # NebulaGraph cluster Docker Compose
-├── examples/               # Standalone Gemini CLI agent
-├── scripts/                # Seed, verification, and pipeline scripts
-└── tests/                  # Pytest test suite
+├── mcp_server/                 # FastAPI app, schemas, invoke handlers
+├── src/finance_mcp/
+│   ├── graph/                  # NebulaGraph client and queries
+│   ├── ingestion/              # Event ingestion pipeline
+│   ├── news/                   # News fetch + parsing
+│   └── reasoning/              # Bull/Bear/Judge orchestration
+├── graph/                      # Neo4j lineage writer/client
+├── connectors/                 # Alpha Vantage, Finnhub, Binance integrations
+├── cache/                      # Redis and Qdrant clients
+├── frontend/                   # React application (chat + dashboard)
+├── infra/                      # Dockerfile and core compose
+├── docker/                     # NebulaGraph compose stack
+├── scripts/                    # e2e and operational verification scripts
+├── tests/                      # Backend/unit/integration tests
+├── requirements.txt
+└── README.md
 ```
 
-## Prerequisites
+## Setup Instructions
 
-- Docker and Docker Compose
-- Python 3.11+
-- Node.js 18+ (frontend only)
-- API keys from:
-  - [Alpha Vantage](https://www.alphavantage.co/support/#api-key)
-  - [Finnhub](https://finnhub.io/register)
-  - [NewsAPI](https://newsapi.org/register) (optional — news analysis tool)
-  - [Google AI Studio](https://aistudio.google.com/) (optional — Gemini chat mode)
+### Backend
 
-## Installation
-
-### 1. Clone and configure environment
+1. Create environment file:
 
 ```bash
-git clone https://github.com/Anurag7010/finance-mcp.git
-cd finance-mcp
 cp infra/.env.example .env
 ```
 
-Open `.env` and fill in your API keys. All available variables with descriptions are documented in `infra/.env.example`.
+2. Set required keys in `.env`:
 
-### 2. Start core infrastructure
+- `MCP_API_KEY`
+- `ALPHA_VANTAGE_API_KEY`
+- `FINNHUB_API_KEY`
+- `NEWS_API_KEY`
+- `GEMINI_API_KEY`
 
-```bash
-docker compose -f infra/docker-compose.yml up -d --build
-```
-
-This starts Redis, Qdrant, Neo4j, and the MCP server on their default ports. The MCP API is available at `http://localhost:8000`.
-
-### 3. Start the NebulaGraph cluster
-
-Required only for the `trace_impact` and `analyze_news_impact` tools.
+3. Start infrastructure and backend:
 
 ```bash
-docker compose -f docker/nebula-docker-compose.yml up -d
+docker compose -f infra/docker-compose.yml -f docker/nebula-docker-compose.yml up -d --build
 ```
 
-### 4. Start the frontend
+4. Health check:
+
+```bash
+curl http://localhost:8000/health
+```
+
+Local Python runtime (without Docker):
+
+```bash
+source source/bin/activate
+pip install -r requirements.txt
+PYTHONPATH=src:. uvicorn mcp_server.server:app --host 0.0.0.0 --port 8000
+```
+
+### Frontend
 
 ```bash
 cd frontend
@@ -99,76 +178,56 @@ npm install
 npm start
 ```
 
-The app opens at `http://localhost:3000`.
+Default URL: `http://localhost:3000`
 
-## Usage
+## API Examples
 
-### Search mode
-
-Type any stock or crypto symbol (`AAPL`, `TSLA`, `BTCUSDT`) into the search bar. Toggle **Live** to enable 5-second auto-refresh. Recent queries are persisted in local storage.
-
-### AI Agent mode
-
-Switch to **Agent** in the top navigation. Ask questions in plain English:
-
-> "What is the current price of Apple?"  
-> "Compare Bitcoin and Ethereum performance today."  
-> "Trace the supply-chain impact of the latest TSMC news."
-
-The Gemini model uses function calling to dispatch MCP tools automatically.
-
-### CLI agent
-
-```bash
-python examples/gemini_agent.py
-```
-
-Runs the same Gemini-backed agent in an interactive terminal session.
-
-### Calling the MCP server directly
+### Invoke `quote.latest`
 
 ```bash
 curl -X POST http://localhost:8000/invoke \
-    -H "Content-Type: application/json" \
-    -H "X-API-Key: $MCP_API_KEY" \
-    -d '{"tool": "quote.latest", "parameters": {"symbol": "AAPL"}}'
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $MCP_API_KEY" \
+  -d '{
+    "tool_name": "quote.latest",
+    "arguments": {"symbol": "AAPL", "maxAgeSec": 60},
+    "agent_id": "cli"
+  }'
 ```
 
-See `mcp_server/capabilities.json` for the full tool schema.
-
-## MCP Tools
-
-| Tool                  | Description                                                  |
-| --------------------- | ------------------------------------------------------------ |
-| `quote.latest`        | Latest bid/ask/price for a stock or crypto symbol            |
-| `quote.stream`        | Subscribe to a streaming price feed via SSE                  |
-| `trace_impact`        | Trace financial impact across the Neo4j lineage graph        |
-| `analyze_news_impact` | Extract events from recent news and map supply-chain effects |
-
-## Security
-
-- All write and data endpoints (`/invoke`, `/subscribe`, `/chat`) require an `X-API-Key` header matching `MCP_API_KEY`.
-- API keys for third-party services are read from environment variables at startup; they are never embedded in source code or exposed to frontend clients.
-- See `infra/.env.example` for the complete list of required secrets.
-
-## Development
-
-Run the backend outside Docker for faster iteration:
+### Invoke `trace_impact`
 
 ```bash
-export PYTHONPATH="$PWD:$PWD/src"
-pip install -r requirements.txt
-uvicorn mcp_server.server:app --reload --port 8000
+curl -X POST http://localhost:8000/invoke \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $MCP_API_KEY" \
+  -d '{
+    "tool_name": "trace_impact",
+    "arguments": {"ticker": "TSMC", "max_hops": 2},
+    "agent_id": "cli"
+  }'
 ```
 
-Run the test suite:
+### Chat Endpoint
 
 ```bash
-pytest tests/
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $MCP_API_KEY" \
+  -d '{"message": "Which companies depend on TSMC?"}'
 ```
 
-Utility scripts for seeding data and verifying the pipeline are in `scripts/`. See `scripts/README.md` for details.
+## Example Use Cases
+
+- Semiconductor shock propagation:
+  Query the downstream impact of a disruption at TSMC.
+- Commodity-driven scenario analysis:
+  Evaluate oil supply disruption effects across exposed sectors.
+- Event-to-market mapping:
+  Ingest a geopolitical headline and compute cascade exposure.
+- Balanced thesis generation:
+  Run bull/bear/judge analysis for a market event question.
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+MIT. See `LICENSE`.

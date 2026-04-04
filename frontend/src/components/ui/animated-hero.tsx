@@ -74,6 +74,7 @@ function Hero({ onNavigateAnalysis, onNavigateDashboard }: HeroProps) {
       <div className="absolute inset-0 overflow-hidden bg-black">
         <video
           src="/bd-video.mp4"
+          //src="/video2.mp4"
           autoPlay
           loop
           muted

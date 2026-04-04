@@ -2,8 +2,6 @@
 Gemini Chat Agent for MCP Server
 """
 import asyncio
-import sys
-from pathlib import Path
 from typing import Dict, Any, Optional
 import google.generativeai as genai
 
@@ -13,8 +11,6 @@ from mcp_server.invoke_handlers.news_analysis import handle_news_analysis
 from mcp_server.invoke_handlers.multi_agent_analysis import handle_multi_agent_analysis
 from mcp_server.utils.logging import get_logger
 
-# Add examples to path for formatter access
-sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
 from finance_formatter import format_financial_report
 
 logger = get_logger(__name__)
