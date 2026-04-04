@@ -8,7 +8,7 @@ interface BearCaseCardProps {
 const BearCaseCard: React.FC<BearCaseCardProps> = ({ keyRisks, rationale }) => {
   return (
     <section className="rounded-xl border-l-4 border-[#EF4444] bg-[rgba(239,68,68,0.08)] p-4">
-      <h3 className="text-[16px] font-semibold text-white">🔴 Bear Case</h3>
+      <h3 className="text-[16px] font-semibold text-white">Bear Case</h3>
       <p className="mt-3 text-sm font-semibold text-white">Key Risks:</p>
       <ul className="mt-2 space-y-2 text-sm text-white/90">
         {keyRisks.map((risk, idx) => (

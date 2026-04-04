@@ -132,7 +132,6 @@ const ChatInterface: React.FC = () => {
   }, [messages]);
 
   useEffect(() => {
-    // Add welcome message on mount
     if (messages.length === 0) {
       setMessages([
         {

@@ -8,11 +8,10 @@ const HomePage: React.FC = () => {
   return (
     <NavbarHero
       brandName="Finance MCP"
-      heroTitle="AI-Driven Market Intelligence"
+      heroTitle="Market Intelligence, Engineered for Perfection"
       heroDescription={
-        "Analyze global markets using real-time financial data, supply-chain \nknowledge graphs, and AI-powered reasoning."
+        "A unified system for real-time market data,supply chain dependency analysis,\nand multi-agent financial reasoning."
       }
-      backgroundImage="/earth-bg.png"
       onNavigateChat={() => navigate("/chat")}
       onNavigateDashboard={() => navigate("/dashboard")}
     />

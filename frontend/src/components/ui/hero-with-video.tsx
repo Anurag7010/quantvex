@@ -13,7 +13,7 @@ interface NavbarHeroProps {
 
 const NavbarHero: React.FC<NavbarHeroProps> = ({
   brandName = "Finance MCP",
-  heroTitle = "AI-Powered Market Intelligence",
+  heroTitle = "Market Intelligence, Engineered for Decisions",
   heroDescription = "A real-time financial analysis platform combining live market data, knowledge-graph reasoning, and AI-driven supply-chain intelligence.",
   backgroundImage = "/earth-bg.png",
   videobackground = "/bd-video.mp4",
@@ -155,7 +155,7 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
                 onClick={onNavigateDashboard}
                 className="hero-secondary-button flex items-center gap-2 rounded-[10px] px-[26px] py-[14px] text-[16px] font-medium text-white transition duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.04]"
               >
-                Analytics Dashboard
+                Open Dashboard
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
@@ -165,39 +165,39 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
         {/* Features Grid */}
         <div className="hero-fade-up animation-delay-3 mt-20 grid grid-cols-1 gap-7 md:grid-cols-2 xl:grid-cols-4">
           <div className="hero-card rounded-2xl p-6">
-            <h3 className="mb-3 text-lg font-semibold text-white">
+            <h3 className="mb-3 text-md font-semibold text-white">
               Real-Time Market Data
             </h3>
-            <p className="text-sm leading-6 text-white/78">
-              Live financial APIs deliver instant stock, crypto, and market
-              pricing with minimal latency.
+            <p className="text-xs leading-6 text-white/78">
+              Live market pricing across equities and crypto, delivered with
+              low-latency data pipelines.
             </p>
           </div>
           <div className="hero-card rounded-2xl p-6">
-            <h3 className="mb-3 text-lg font-semibold text-white">
+            <h3 className="mb-3 text-md font-semibold text-white">
               Supply Chain Intelligence
             </h3>
-            <p className="text-sm leading-6 text-white/78">
-              A knowledge graph models dependencies between companies and
-              commodities to trace cascading impacts.
+            <p className="text-xs leading-6 text-white/78">
+              Graph-based modeling of global dependencies to identify cascading
+              impacts across companies and sectors.
             </p>
           </div>
           <div className="hero-card rounded-2xl p-6">
-            <h3 className="mb-3 text-lg font-semibold text-white">
-              AI Financial Analyst
+            <h3 className="mb-3 text-md font-semibold text-white">
+              Multi-Agent Reasoning
             </h3>
-            <p className="text-sm leading-6 text-white/78">
-              Ask complex market questions and receive structured analysis
-              powered by MCP tools and real-time data.
+            <p className="text-xs leading-6 text-white/78">
+              Bull-bear agent evaluation with a structured decision layer to
+              reduce bias and produce balanced, explainable market insights.
             </p>
           </div>
           <div className="hero-card rounded-2xl p-6">
-            <h3 className="mb-3 text-lg font-semibold text-white">
+            <h3 className="mb-3 text-md font-semibold text-white">
               Event-Driven Insights
             </h3>
-            <p className="text-sm leading-6 text-white/78">
-              News ingestion automatically detects economic events and evaluates
-              their downstream market impact.
+            <p className="text-xs leading-6 text-white/78">
+              Continuous ingestion of global events with automated impact
+              analysis on affected assets and downstream dependencies.
             </p>
           </div>
         </div>
