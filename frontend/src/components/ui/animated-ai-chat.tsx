@@ -364,7 +364,7 @@ export function AnimatedAIChat({
                 onKeyDown={handleKeyDown}
                 onFocus={() => setInputFocused(true)}
                 onBlur={() => setInputFocused(false)}
-                placeholder="Ask Finance MCP a question..."
+                placeholder="Ask QuantVex a question..."
                 containerClassName="w-full"
                 className={cn(
                   "w-full px-4 py-3",

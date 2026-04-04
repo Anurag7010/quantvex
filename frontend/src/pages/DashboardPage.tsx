@@ -318,7 +318,7 @@ const DashboardPage: React.FC = () => {
         <div className="mx-auto flex max-w-[1280px] items-center justify-between px-6 py-4 sm:px-8">
           <div className="flex items-center gap-4">
             <div className="text-lg font-semibold tracking-[-0.02em]">
-              Finance MCP
+              QuantVex
             </div>
             <span className="hidden text-sm text-white/60 lg:inline">
               Market Intelligence Command Center

@@ -1,4 +1,6 @@
 import React from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import AnalysisContainer from "./AnalysisContainer";
 import BearCaseCard from "./BearCaseCard";
@@ -17,16 +19,74 @@ interface StructuredAnalysisMessageProps {
 
 const sectionClass = "analysis-section-fade";
 
+const MarkdownFallback: React.FC<{ content: string }> = ({ content }) => {
+  return (
+    <div className="prose prose-invert max-w-none text-sm leading-relaxed text-neutral-300">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          h2: ({ children }) => (
+            <h2 className="mb-2 mt-4 text-xl font-semibold text-white">
+              {children}
+            </h2>
+          ),
+          h3: ({ children }) => {
+            const text = String(children).toLowerCase();
+            if (text.includes("bull case")) {
+              return (
+                <h3 className="mb-1 mt-3 border-l-4 border-green-500 pl-4 text-lg font-semibold text-white">
+                  {children}
+                </h3>
+              );
+            }
+            if (text.includes("bear case")) {
+              return (
+                <h3 className="mb-1 mt-3 border-l-4 border-red-500 pl-4 text-lg font-semibold text-white">
+                  {children}
+                </h3>
+              );
+            }
+            if (text.includes("final verdict")) {
+              return (
+                <h3 className="mb-1 mt-3 border-l-4 border-[#4A70A9] pl-4 text-lg font-semibold text-white">
+                  {children}
+                </h3>
+              );
+            }
+            return (
+              <h3 className="mb-1 mt-3 text-lg font-semibold text-white">
+                {children}
+              </h3>
+            );
+          },
+          p: ({ children }) => (
+            <p className="text-neutral-300 leading-relaxed">{children}</p>
+          ),
+          ul: ({ children }) => <ul className="space-y-1 pl-4">{children}</ul>,
+          li: ({ children }) => (
+            <li className="text-neutral-300">{children}</li>
+          ),
+          strong: ({ children }) => (
+            <strong className="font-semibold text-white">{children}</strong>
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+};
+
 const StructuredAnalysisMessage: React.FC<StructuredAnalysisMessageProps> = ({
   content,
 }) => {
   if (!isMultiAgentAnalysisMarkdown(content)) {
-    return <p className="whitespace-pre-wrap">{content}</p>;
+    return <MarkdownFallback content={content} />;
   }
 
   const parsed = parseMultiAgentAnalysis(content);
   if (!parsed) {
-    return <p className="whitespace-pre-wrap">{content}</p>;
+    return <MarkdownFallback content={content} />;
   }
 
   return (

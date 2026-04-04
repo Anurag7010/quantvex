@@ -13,7 +13,7 @@ const parseBulletValue = (line: string, label: string): string => {
 };
 
 export const isMultiAgentAnalysisMarkdown = (content: string): boolean => {
-  return /^##\s+Multi-Agent Market Analysis/m.test(content);
+  return /^##\s+.*Multi-Agent Market Analysis/mi.test(content);
 };
 
 export const parseMultiAgentAnalysis = (
