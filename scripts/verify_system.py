@@ -263,30 +263,33 @@ async def _assert_news_analysis():
 
 
 # ===========================================================================
-# 5. Gemini tool registration
+# 5. GPT tool registration
 # ===========================================================================
-def check_gemini_agent():
-    _section("5. Gemini Chat Agent Tool Registration")
+def check_gpt_agent():
+    _section("5. GPT Chat Agent Tool Registration")
     from mcp_server.config import get_settings
     s = get_settings()
 
-    def _gemini_key():
-        assert s.gemini_api_key, "GEMINI_API_KEY not configured in .env"
+    def _openai_key():
+        assert s.openai_api_key, "OPENAI_API_KEY not configured in .env"
 
     def _tools_registered():
-        if not s.gemini_api_key:
-            raise AssertionError("GEMINI_API_KEY missing — skip tool check")
-        from mcp_server.chat_agent import GeminiChatAgent
-        agent = GeminiChatAgent()
-        assert len(agent.tools) == 1, "GeminiChatAgent.tools should contain exactly 1 Tool"
-        decls = agent.tools[0].function_declarations
-        names = {d.name for d in decls}
-        required = {"get_stock_quote", "trace_supply_chain_impact", "analyze_news_impact"}
+        if not s.openai_api_key:
+            raise AssertionError("OPENAI_API_KEY missing — skip tool check")
+        from mcp_server.chat_agent import GPTChatAgent
+        agent = GPTChatAgent()
+        names = {tool["function"]["name"] for tool in agent.tools}
+        required = {
+            "get_stock_quote",
+            "trace_supply_chain_impact",
+            "analyze_news_impact",
+            "multi_agent_analysis",
+        }
         missing = required - names
         assert not missing, f"Missing function declarations: {missing}"
 
-    check("GEMINI_API_KEY is set", _gemini_key)
-    check("GeminiChatAgent registers all 3 tools", _tools_registered)
+    check("OPENAI_API_KEY is set", _openai_key)
+    check("GPTChatAgent registers all 4 tools", _tools_registered)
 
 
 # ===========================================================================
@@ -320,7 +323,7 @@ def main():
     check_graph_data()
     check_news_pipeline()
     check_mcp_handlers()
-    check_gemini_agent()
+    check_gpt_agent()
     check_http_endpoint()
 
     elapsed = time.time() - t0

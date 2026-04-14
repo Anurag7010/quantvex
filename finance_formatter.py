@@ -1,4 +1,4 @@
-"""Formatting helpers for Finance MCP Gemini agent.
+"""Formatting helpers for Finance MCP GPT agent.
 
 Transforms raw quote payloads into professional, structured financial reports.
 """
