@@ -48,7 +48,7 @@ Flow summary:
 
 - `POST /invoke` for tool execution.
 - `POST /subscribe` and `POST /unsubscribe` for streaming lifecycle.
-- `POST /chat` for Gemini-driven tool orchestration.
+- `POST /chat` for OpenAI-driven tool orchestration.
 - `GET /capabilities` and `GET /health` for discovery and checks.
 
 Implemented tools:
@@ -148,7 +148,7 @@ cp infra/.env.example .env
 - `ALPHA_VANTAGE_API_KEY`
 - `FINNHUB_API_KEY`
 - `NEWS_API_KEY`
-- `GEMINI_API_KEY`
+- `OPENAI_API_KEY`
 
 3. Start infrastructure and backend:
 

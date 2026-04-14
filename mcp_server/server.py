@@ -27,9 +27,9 @@ from graph.lineage_writer import get_lineage_writer
 
 try:
     from mcp_server.chat_agent import get_chat_agent
-    GEMINI_AVAILABLE = True
+    GPT_AVAILABLE = True
 except Exception:
-    GEMINI_AVAILABLE = False
+    GPT_AVAILABLE = False
 
 # Setup logging
 setup_logging()
@@ -305,14 +305,14 @@ class ChatResponse(BaseModel):
 
 @app.post("/chat", dependencies=[Security(get_api_key)])
 async def chat(request: ChatRequest):
-    """Chat with the Gemini AI agent. Requires X-API-Key header."""
-    if not GEMINI_AVAILABLE:
+    """Chat with the GPT AI agent. Requires X-API-Key header."""
+    if not GPT_AVAILABLE:
         return JSONResponse(
             status_code=503,
             content=ChatResponse(
                 response="",
                 success=False,
-                error="Gemini chat agent not available. Check GEMINI_API_KEY configuration."
+                error="GPT chat agent not available. Check OPENAI_API_KEY configuration."
             ).model_dump()
         )
     
@@ -331,12 +331,13 @@ async def chat(request: ChatRequest):
         logger.error(f"Chat endpoint error: {e}")
         error_msg = str(e)
 
-        if "429" in error_msg or "quota" in error_msg.lower():
-            error_msg = "The Gemini API quota has been exceeded. Please try again in a few moments or check your API billing settings."
-        elif "401" in error_msg or "authentication" in error_msg.lower():
-            error_msg = "Invalid Gemini API key. Please check your configuration."
-        elif "GEMINI_API_KEY" in error_msg:
-            error_msg = "Gemini API key not configured. Please add it to your environment settings."
+        lower_error = error_msg.lower()
+        if "429" in error_msg or "quota" in lower_error or "rate limit" in lower_error:
+            error_msg = "The OpenAI API quota or rate limit has been exceeded. Please try again shortly or check your billing settings."
+        elif "401" in error_msg or "authentication" in lower_error or "incorrect api key" in lower_error:
+            error_msg = "Invalid OpenAI API key. Please check your configuration."
+        elif "OPENAI_API_KEY" in error_msg:
+            error_msg = "OpenAI API key not configured. Please add it to your environment settings."
         
         return JSONResponse(
             status_code=200,  # Return 200 so frontend can display error message

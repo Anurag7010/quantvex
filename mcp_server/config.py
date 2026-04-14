@@ -35,7 +35,8 @@ class Settings(BaseSettings):
 
     news_api_key: str = ""
     mcp_api_key: str = "dev_key_change_in_production"
-    gemini_api_key: str = ""
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4.1-mini"
 
     class Config:
         env_file = ".env"

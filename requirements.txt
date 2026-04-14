@@ -32,8 +32,8 @@ transformers==4.40.0
 langchain==0.1.20
 langchain-core==0.1.52
 
-# Google Gemini (Free Tier)
-google-generativeai==0.8.3
+# OpenAI GPT
+openai==1.40.6
 
 # Testing
 pytest==7.4.3
