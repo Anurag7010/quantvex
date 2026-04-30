@@ -36,6 +36,17 @@ class Neo4jClient:
         except Exception as e:
             logger.error("neo4j_connection_error", error=str(e))
             return False
+
+    def ping(self) -> bool:
+        """Run a lightweight Neo4j query to verify connectivity."""
+        try:
+            with self._driver.session() as session:
+                result = session.run("RETURN 1 AS num")
+                result.single()
+            return True
+        except Exception as e:
+            logger.error("neo4j_ping_error", error=str(e))
+            return False
     
     def _initialize_schema(self):
         """Initialize constraints and indexes"""

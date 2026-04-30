@@ -5,7 +5,6 @@ Transforms raw quote payloads into professional, structured financial reports.
 import os
 from typing import Any, Dict, List, Optional
 
-USD_TO_INR = 89.94
 INR_SYMBOL = "₹"
 
 WEB_MODE = os.getenv("WEB_MODE", "1").lower() in ("1", "true", "yes", "on")
@@ -113,14 +112,14 @@ def _single_asset_report(quote: Dict[str, Any], errors: List[str]) -> str:
 
     lines.append("### PRICE INFORMATION\n")
     lines.append(f"- **Symbol:** {symbol}")
-    lines.append(f"- **Current Price:** {_format_currency(quote.get('price'))}")
-    lines.append(f"- **Previous Close:** {_format_currency(quote.get('previous_close'))}")
+    lines.append(f"- **Current Price:** {_format_currency(quote.get('inr_price'))}")
+    lines.append(f"- **Previous Close:** {_format_currency(quote.get('inr_previous_close'))}")
     lines.append(f"- **Change:** {_format_change(change, pct)}\n")
 
     lines.append("### TRADING RANGE\n")
-    lines.append(f"- **Open:** {_format_currency(quote.get('open'))}")
-    lines.append(f"- **Day High:** {_format_currency(quote.get('high'))}")
-    lines.append(f"- **Day Low:** {_format_currency(quote.get('low'))}\n")
+    lines.append(f"- **Open:** {_format_currency(quote.get('inr_open'))}")
+    lines.append(f"- **Day High:** {_format_currency(quote.get('inr_high'))}")
+    lines.append(f"- **Day Low:** {_format_currency(quote.get('inr_low'))}\n")
 
     lines.append("### MARKET ACTIVITY\n")
     lines.append(f"- **Volume:** {_format_volume(quote.get('volume'))}\n")
@@ -149,7 +148,7 @@ def _comparison_report(quotes: List[Dict[str, Any]], errors: List[str]) -> str:
 
     for quote in quotes:
         symbol = quote.get("symbol", "N/A")
-        price = _format_currency(quote.get('price'))
+        price = _format_currency(quote.get("inr_price"))
         change_str = _format_change(quote.get("change"), quote.get("change_pct"))
         volume = quote.get("volume")
         volume_str = f"{volume / 1e6:.0f}M" if volume and volume >= 1e6 else _format_volume(volume)

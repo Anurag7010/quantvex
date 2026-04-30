@@ -423,6 +423,11 @@ class SecureGraphClient:
         """
         return self._execute(queries.FETCH_COMPANY, {"ticker": ticker})
 
+    def ping(self) -> bool:
+        """Run a lightweight NebulaGraph query to verify connectivity."""
+        result = self._execute("SHOW SPACES")
+        return result.is_succeeded()
+
     def fetch_commodity(self, commodity_name: str) -> ResultSet:
         """
         Fetch all properties of a Commodity vertex.
@@ -568,6 +573,26 @@ class SecureGraphClient:
         if not isinstance(max_hops, int) or not (1 <= max_hops <= 5):
             raise ValueError("max_hops must be an integer between 1 and 5 inclusive")
 
+        commodity_rs = self.fetch_commodity(target_ticker)
+        if commodity_rs.row_size() > 0:
+            impacted_by_ticker: dict[str, dict[str, str]] = {}
+            requiring = self.find_companies_requiring(target_ticker)
+            for company in requiring:
+                impacted_by_ticker[company["ticker"]] = company
+                downstream = self._trace_company_impact(company["ticker"], max_hops)
+                for impacted_company in downstream:
+                    impacted_by_ticker[impacted_company["ticker"]] = impacted_company
+            impacted = list(impacted_by_ticker.values())
+            logger.info(
+                "trace_impact: commodity=%r max_hops=%d found=%d",
+                target_ticker, max_hops, len(impacted),
+            )
+            return impacted
+
+        return self._trace_company_impact(target_ticker, max_hops)
+
+    def _trace_company_impact(self, target_ticker: str, max_hops: int) -> list:
+        """Trace downstream Company vertices from a Company shock anchor."""
         query = queries.TRACE_IMPACT.format(max_hops=max_hops)
         rs = self._execute(query, {"ticker": target_ticker})
 
@@ -839,4 +864,23 @@ class SecureGraphClient:
         logger.info(
             "insert_requires: %r -> %r volume=%d", ticker, commodity_id, volume
         )
+        return True
+
+    def insert_impacts(self, event_id: str, target_vid: str) -> bool:
+        """
+        Insert an IMPACTS edge from an Event to a Company or Commodity vertex.
+
+        Parameters
+        ----------
+        event_id   : str — Event VID
+        target_vid : str — Company or Commodity VID impacted by the event
+        """
+        _validate_vid(event_id, "event_id")
+        _validate_vid(target_vid, "target_vid")
+        query = (
+            f'INSERT EDGE IF NOT EXISTS IMPACTS(impact_time) '
+            f'VALUES "{event_id}"->"{target_vid}":(datetime())'
+        )
+        self._execute(query)
+        logger.info("insert_impacts: %r -> %r", event_id, target_vid)
         return True

@@ -3,11 +3,8 @@ from __future__ import annotations
 import logging
 from typing import List
 
-from mcp_server.invoke_handlers.news_analysis import handle_news_analysis
-from mcp_server.invoke_handlers.quote_latest import handle_quote_latest
-from mcp_server.invoke_handlers.trace_impact import handle_trace_impact
-
 from finance_mcp.reasoning.schemas import AgentInput, AgentOutput
+from finance_mcp.services import get_quote, run_news_pipeline, trace_impact
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +36,9 @@ async def run_bear_agent(agent_input: AgentInput) -> AgentOutput:
 
     if ticker:
         try:
-            impact_res = await handle_trace_impact(
-                ticker=ticker,
-                max_hops=3,
-                agent_id="bear_agent",
-            )
-            if impact_res.success and impact_res.data:
-                impacted = impact_res.data.get("impacted_count", 0)
+            impact_res = await trace_impact(ticker, hops=3)
+            if impact_res["success"] and impact_res.get("data"):
+                impacted = impact_res["data"].get("impacted_count", 0)
                 if impacted > 0:
                     signals.append(
                         f"Supply-chain graph shows {impacted} downstream dependencies, increasing disruption blast radius."
@@ -55,14 +48,9 @@ async def run_bear_agent(agent_input: AgentInput) -> AgentOutput:
             logger.warning("bear_agent trace_impact failed: %s", exc)
 
         try:
-            quote_res = await handle_quote_latest(
-                symbol=ticker,
-                max_age_sec=60,
-                agent_id="bear_agent",
-                query_text=agent_input.query,
-            )
-            if quote_res.success and quote_res.data:
-                source = quote_res.data.get("data_source", "unknown")
+            quote_res = await get_quote(ticker)
+            if quote_res["success"] and quote_res.get("data"):
+                source = quote_res["data"].get("data_source", "unknown")
                 signals.append(
                     f"Market quote monitoring active for {ticker} (source: {source}); valuation can re-rate rapidly under stress."
                 )
@@ -72,16 +60,15 @@ async def run_bear_agent(agent_input: AgentInput) -> AgentOutput:
 
     if _should_run_news(agent_input.query):
         try:
-            news_res = await handle_news_analysis(
+            news_res = await run_news_pipeline(
                 query=agent_input.query,
                 ticker=ticker,
                 limit=8,
                 max_hops=3,
-                agent_id="bear_agent",
             )
-            if news_res.success and news_res.data:
-                events_found = news_res.data.get("events_found", 0)
-                cascade = news_res.data.get("total_cascade_companies", 0)
+            if news_res["success"] and news_res.get("data"):
+                events_found = news_res["data"].get("events_found", 0)
+                cascade = news_res["data"].get("total_cascade_companies", 0)
                 if events_found > 0:
                     signals.append(
                         f"News parser flagged {events_found} disruption events (geopolitical/cost/supply risk)."

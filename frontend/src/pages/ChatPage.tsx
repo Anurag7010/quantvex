@@ -82,11 +82,13 @@ const ChatPage: React.FC = () => {
         };
         setMessages((prev) => [...prev, errorMessage]);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Network error occurred";
       const errorMessage: Message = {
         id: `error-${Date.now()}`,
         role: "assistant",
-        content: `Error: ${error.message || "Network error occurred"}`,
+        content: `Error: ${message}`,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);

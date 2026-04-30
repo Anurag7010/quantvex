@@ -14,9 +14,6 @@ interface PriceHistoryProps {
   quotes: QuoteData[];
 }
 
-// Exchange rate: 1 USD = 89.94 INR
-const USD_TO_INR = 89.94;
-
 const PriceHistory: React.FC<PriceHistoryProps> = ({ quotes }) => {
   const [chartData, setChartData] = useState<
     Array<{ time: string; price: number; symbol: string }>
@@ -34,7 +31,7 @@ const PriceHistory: React.FC<PriceHistoryProps> = ({ quotes }) => {
 
       const data = filteredQuotes.map((quote) => ({
         time: new Date(quote.timestamp).toLocaleTimeString(),
-        price: quote.price * USD_TO_INR,
+        price: quote.inr_price ?? 0,
         symbol: quote.symbol,
       }));
       setChartData(data);
@@ -81,7 +78,10 @@ const PriceHistory: React.FC<PriceHistoryProps> = ({ quotes }) => {
                 borderRadius: "8px",
                 color: "#fff",
               }}
-              formatter={(value: any) => [`₹${value.toFixed(2)}`, "Price"]}
+              formatter={(value: string | number | readonly (string | number)[] | undefined) => [
+                `₹${Number(value).toFixed(2)}`,
+                "Price",
+              ]}
             />
             <Line
               type="monotone"
