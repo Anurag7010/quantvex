@@ -50,3 +50,11 @@ coverage.xml
 *.bak
 tmp/
 scratch/
+
+# Project specific
+quantvex_summary.txt
+summary_script.sh
+docker/certs/*
+!docker/certs/.gitkeep
+infra/.env
+frontend/.env
