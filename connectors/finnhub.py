@@ -3,6 +3,8 @@ Finnhub REST Connector
 Free tier - 60 API calls/minute
 """
 import httpx
+import asyncio
+import inspect
 import time
 from typing import Optional
 from datetime import datetime
@@ -15,6 +17,13 @@ from connectors.exceptions import RateLimitError
 logger = get_logger(__name__)
 
 
+async def _response_json(response: httpx.Response) -> dict:
+    payload = response.json()
+    if inspect.isawaitable(payload):
+        payload = await payload
+    return payload
+
+
 class FinnhubConnector:
     """Finnhub REST API connector. Free tier: 60 calls/min."""
 
@@ -23,19 +32,19 @@ class FinnhubConnector:
     def __init__(self):
         settings = get_settings()
         self._api_key = settings.finnhub_api_key
-        self._client = httpx.AsyncClient(timeout=30.0)
+        self._client = httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=3.0))
         self._last_call_time = 0
         self._min_interval = 1.0  # 60 calls/minute max
     
     async def close(self):
         await self._client.aclose()
 
-    def _respect_rate_limit(self):
+    async def _respect_rate_limit(self) -> None:
         elapsed = time.time() - self._last_call_time
         if elapsed < self._min_interval:
             sleep_time = self._min_interval - elapsed
             logger.debug("rate_limit_wait", seconds=sleep_time)
-            time.sleep(sleep_time)
+            await asyncio.sleep(sleep_time)
         self._last_call_time = time.time()
     
     @retry(
@@ -44,7 +53,7 @@ class FinnhubConnector:
         retry=retry_if_exception_type((httpx.HTTPError, RateLimitError))
     )
     async def get_quote(self, symbol: str) -> Optional[QuoteData]:
-        self._respect_rate_limit()
+        await self._respect_rate_limit()
         start_time = time.time()
         
         try:
@@ -65,7 +74,7 @@ class FinnhubConnector:
                 raise RateLimitError("Rate limit exceeded")
             
             response.raise_for_status()
-            data = response.json()
+            data = await _response_json(response)
             
             # Check for empty response
             if not data or data.get("c") == 0:
@@ -116,7 +125,7 @@ class FinnhubConnector:
         """
         Fetch company profile data
         """
-        self._respect_rate_limit()
+        await self._respect_rate_limit()
         
         try:
             headers = {"X-Finnhub-Token": self._api_key}
@@ -129,7 +138,7 @@ class FinnhubConnector:
             )
             response.raise_for_status()
             
-            return response.json()
+            return await _response_json(response)
             
         except Exception as e:
             logger.error("finnhub_profile_error", error=str(e))
@@ -139,7 +148,7 @@ class FinnhubConnector:
         """
         Search for symbols matching query
         """
-        self._respect_rate_limit()
+        await self._respect_rate_limit()
         
         try:
             headers = {"X-Finnhub-Token": self._api_key}
@@ -152,7 +161,7 @@ class FinnhubConnector:
             )
             response.raise_for_status()
             
-            data = response.json()
+            data = await _response_json(response)
             return data.get("result", [])
             
         except Exception as e:

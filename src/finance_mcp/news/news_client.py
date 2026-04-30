@@ -1,36 +1,16 @@
-"""
-Phase 3 — NewsAPI Client
+"""News client for financial headlines sourced from NewsData.io."""
 
-Fetches financial news articles from the NewsAPI.org ``/v2/everything``
-endpoint and returns them as ``NewsArticle`` dataclass instances.
-
-Security notes
---------------
-* The API key is read from settings/environment — never hard-coded.
-* Query strings are passed directly to the NewsAPI ``q`` parameter as
-  legitimate search terms; they are not interpolated into any SQL/nGQL
-  statement.
-* HTTP responses are parsed with a safe JSON decoder; no ``eval`` or
-  ``exec`` is used.
-* Timeouts and a maximum-result cap prevent resource exhaustion.
-
-Usage
------
-    from finance_mcp.news.news_client import NewsClient
-
-    client = NewsClient()
-    articles = await client.fetch_market_news("semiconductor", limit=5)
-    for a in articles:
-        print(a.title, a.published_at)
-"""
 from __future__ import annotations
 
+import hashlib
 import logging
+import ssl
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import List, Optional
 
-import httpx
+import aiohttp
+import certifi
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +18,12 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-NEWSAPI_EVERYTHING_URL = "https://newsapi.org/v2/everything"
+NEWSDATA_NEWS_URL = "https://newsdata.io/api/1/latest"
 
 # Hard ceiling on articles per request — prevents accidental large fetches.
 _MAX_RESULTS_CAP = 100
 
-# Default page size sent to NewsAPI when the caller does not specify a limit.
+# Default page size sent to NewsData.io when the caller does not specify a limit.
 _DEFAULT_PAGE_SIZE = 10
 
 # HTTP request timeout (connect + read)
@@ -51,9 +31,6 @@ _REQUEST_TIMEOUT_SEC = 15.0
 
 # Language filter — restrict to English articles by default.
 _DEFAULT_LANGUAGE = "en"
-
-# Sort order sent to NewsAPI.
-_SORT_BY = "publishedAt"
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +40,7 @@ _SORT_BY = "publishedAt"
 @dataclass
 class NewsArticle:
     """
-    Structured representation of a single NewsAPI article.
+    Structured representation of a single news article.
 
     Attributes
     ----------
@@ -73,6 +50,7 @@ class NewsArticle:
     published_at : datetime    — UTC publication timestamp
     source_name  : str         — publisher name (e.g. "Reuters")
     query        : str         — the search query that surfaced this article
+    article_id   : str         — stable short id derived from url + title
     """
     title: str
     description: str
@@ -80,6 +58,7 @@ class NewsArticle:
     published_at: datetime
     source_name: str
     query: str = field(default="")
+    article_id: str = field(default="")
 
     def as_dict(self) -> dict:
         """Return a JSON-serialisable representation."""
@@ -90,6 +69,7 @@ class NewsArticle:
             "published_at": self.published_at.isoformat(),
             "source_name": self.source_name,
             "query": self.query,
+            "article_id": self.article_id,
         }
 
 
@@ -99,37 +79,17 @@ class NewsArticle:
 
 class NewsClient:
     """
-    Thin async client for the NewsAPI ``/v2/everything`` endpoint.
+    Thin async client for the NewsData.io news endpoint.
 
     Parameters
     ----------
     api_key : str | None
-        NewsAPI key.  When ``None`` the key is read from the MCP settings
-        (``settings.news_api_key``).  Pass explicitly in tests.
+        NewsData.io key. When ``None`` the key is read from the MCP settings
+        (``settings.newsdata_api_key``). Pass explicitly in tests.
     language : str
-        ISO-639-1 language code to filter results.  Default ``"en"``.
+        ISO-639-1 language code to filter results. Default ``"en"``.
     timeout : float
-        HTTP request timeout in seconds.  Default 15 s.
-
-    Examples
-    --------
-    Standalone (sync test)::
-
-        import asyncio
-        from finance_mcp.news.news_client import NewsClient
-
-        async def main():
-            client = NewsClient(api_key="YOUR_KEY")
-            articles = await client.fetch_market_news("semiconductor", limit=5)
-            for a in articles:
-                print(a.title)
-
-        asyncio.run(main())
-
-    With settings from environment::
-
-        client = NewsClient()          # reads NEWS_API_KEY env var
-        articles = await client.fetch_market_news("lithium", limit=10)
+        HTTP request timeout in seconds. Default 15 s.
     """
 
     def __init__(
@@ -139,23 +99,21 @@ class NewsClient:
         timeout: float = _REQUEST_TIMEOUT_SEC,
     ) -> None:
         if api_key is None:
-            # Defer import so this module can be imported without FastAPI
             from mcp_server.config import get_settings
-            api_key = get_settings().news_api_key
+
+            settings = get_settings()
+            api_key = settings.newsdata_api_key or settings.news_api_key
 
         if not api_key or api_key.strip() == "":
-            raise ValueError(
-                "NewsClient: API key is required. "
-                "Set NEWS_API_KEY in your .env file or pass api_key= directly."
+            raise RuntimeError(
+                "NEWSDATA_API_KEY is not set. Get a free key at https://newsdata.io "
+                "and add it to your .env file."
             )
 
         self._api_key = api_key
         self._language = language
         self._timeout = timeout
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
+        self.base_url = NEWSDATA_NEWS_URL
 
     async def fetch_market_news(
         self,
@@ -164,140 +122,179 @@ class NewsClient:
         from_date: Optional[str] = None,
         to_date: Optional[str] = None,
     ) -> List[NewsArticle]:
-        """
-        Fetch news articles matching ``query`` from NewsAPI.
+        """Fetch news articles matching ``query`` from NewsData.io."""
+        return await self.fetch_articles(
+            query=query,
+            max_results=limit,
+            from_date=from_date,
+            to_date=to_date,
+        )
 
-        Parameters
-        ----------
-        query : str
-            Search terms sent to NewsAPI ``q`` parameter.
-            Example: ``"semiconductor"`` or ``"lithium battery supply"``.
-            Must be a non-empty string, 1–500 characters.
-        limit : int
-            Maximum number of articles to return.  Capped at
-            ``_MAX_RESULTS_CAP`` (100).  Default 10.
-        from_date : str | None
-            Optional ISO-8601 date lower bound, e.g. ``"2026-01-01"``.
-            Passed directly to NewsAPI ``from`` parameter.
-        to_date : str | None
-            Optional ISO-8601 date upper bound, e.g. ``"2026-03-09"``.
-            Passed directly to NewsAPI ``to`` parameter.
-
-        Returns
-        -------
-        List[NewsArticle]
-            Articles sorted by ``publishedAt`` descending (NewsAPI default
-            when ``sortBy=publishedAt``).  May be an empty list if no
-            articles match or all articles have empty headlines.
-
-        Raises
-        ------
-        ValueError
-            When ``query`` is empty/invalid or ``limit`` is out of range.
-        httpx.HTTPStatusError
-            When NewsAPI returns a non-2xx status code.
-        httpx.TimeoutException
-            When the request exceeds the configured timeout.
-        RuntimeError
-            When NewsAPI returns a non-OK status in the response body
-            (e.g. ``"apiKeyInvalid"``).
-        """
-        # ----------------------------------------------------------------
-        # Input validation
-        # ----------------------------------------------------------------
+    async def fetch_articles(
+        self,
+        query: str,
+        max_results: int = _DEFAULT_PAGE_SIZE,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+    ) -> List[NewsArticle]:
         if not isinstance(query, str) or not query.strip():
             raise ValueError("query must be a non-empty string")
         query = query.strip()
         if len(query) > 500:
             raise ValueError("query must not exceed 500 characters")
 
-        if not isinstance(limit, int) or isinstance(limit, bool):
-            raise ValueError("limit must be a positive integer")
-        if limit < 1:
-            raise ValueError("limit must be at least 1")
-        page_size = min(limit, _MAX_RESULTS_CAP)
+        if not isinstance(max_results, int) or isinstance(max_results, bool):
+            raise ValueError("max_results must be a positive integer")
+        if max_results < 1:
+            raise ValueError("max_results must be at least 1")
 
-        # ----------------------------------------------------------------
-        # Build request parameters
-        # ----------------------------------------------------------------
-        params: dict = {
-            "q": query,
-            "language": self._language,
-            "sortBy": _SORT_BY,
-            "pageSize": page_size,
-            "apiKey": self._api_key,
-        }
-        if from_date:
-            params["from"] = from_date
-        if to_date:
-            params["to"] = to_date
-
-        logger.info(
-            "newsapi_fetch query=%r limit=%d language=%s",
-            query, page_size, self._language,
+        page_size = min(max_results, _MAX_RESULTS_CAP)
+        words = query.split()
+        ladder = list(
+            dict.fromkeys(
+                [
+                    " ".join(words[:3]),
+                    " ".join(words[:2]),
+                    words[0],
+                ]
+            )
         )
 
-        # ----------------------------------------------------------------
-        # HTTP request
-        # ----------------------------------------------------------------
-        async with httpx.AsyncClient(timeout=self._timeout) as http:
-            response = await http.get(NEWSAPI_EVERYTHING_URL, params=params)
+        ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+        connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+        async with aiohttp.ClientSession(
+            connector=connector,
+            timeout=aiohttp.ClientTimeout(total=self._timeout),
+        ) as session:
+            for q in ladder:
+                articles = await self._fetch_single(
+                    session,
+                    q,
+                    page_size,
+                    from_date=from_date,
+                    to_date=to_date,
+                )
+                if articles:
+                    return articles
+        return []
 
-        # ----------------------------------------------------------------
-        # Error handling
-        # ----------------------------------------------------------------
-        response.raise_for_status()  # raises httpx.HTTPStatusError on 4xx/5xx
+    async def _fetch_single(
+        self,
+        session: aiohttp.ClientSession,
+        query: str,
+        size: int,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+    ) -> List[NewsArticle]:
+        params = {
+            "apikey": self._api_key,
+            "q": query,
+            "language": self._language,
+            "size": min(size, 10),
+        }
+        if from_date:
+            params["from_date"] = from_date
+        if to_date:
+            params["to_date"] = to_date
 
-        payload = response.json()
+        try:
+            async with session.get(self.base_url, params=params) as resp:
+                if resp.status != 200:
+                    logger.info(
+                        "newsdata_fetch_status query=%r status=%s",
+                        query,
+                        resp.status,
+                    )
+                    return []
+                payload = await resp.json()
+        except Exception as exc:
+            logger.warning("newsdata_fetch_failed query=%r error=%s", query, exc)
+            return []
 
-        if payload.get("status") != "ok":
-            code = payload.get("code", "unknown")
-            message = payload.get("message", "No error message returned")
-            raise RuntimeError(
-                f"NewsAPI error [{code}]: {message}"
-            )
+        status = str(payload.get("status", "")).lower()
+        if status and status not in {"ok", "success"}:
+            return []
 
-        # ----------------------------------------------------------------
-        # Parse articles
-        # ----------------------------------------------------------------
-        raw_articles = payload.get("articles", [])
+        articles = self._parse_results(payload.get("results", []))
+        for article in articles:
+            article.query = query
+
+        logger.info(
+            "newsdata_fetch_done query=%r returned=%d",
+            query,
+            len(articles),
+        )
+        return articles
+
+    def _parse_results(self, results: list) -> List[NewsArticle]:
         articles: List[NewsArticle] = []
-
-        for raw in raw_articles:
-            title = (raw.get("title") or "").strip()
-            description = (raw.get("description") or "").strip()
-            url = (raw.get("url") or "").strip()
-            source_name = (raw.get("source") or {}).get("name") or "Unknown"
-            published_raw = raw.get("publishedAt") or ""
-
-            # Skip articles NewsAPI returns with placeholder titles
-            if not title or title == "[Removed]":
+        for item in results:
+            title = (item.get("title") or "").strip()
+            if not title:
                 continue
-
-            published_at = _parse_datetime(published_raw)
-
+            url = (item.get("link") or item.get("url") or "").strip()
+            article_id = hashlib.md5((url + title).encode("utf-8")).hexdigest()[:12]
+            description = (item.get("description") or title).strip()
+            source_name = item.get("source_id") or item.get("source_name") or "unknown"
+            published_raw = item.get("pubDate") or item.get("publishedAt") or ""
             articles.append(
                 NewsArticle(
                     title=title,
                     description=description,
                     url=url,
-                    published_at=published_at,
+                    published_at=_parse_datetime(published_raw),
                     source_name=source_name,
-                    query=query,
+                    article_id=article_id,
                 )
             )
-
-        logger.info(
-            "newsapi_fetch_done query=%r total_api=%d returned=%d",
-            query,
-            payload.get("totalResults", 0),
-            len(articles),
-        )
         return articles
 
-    # ------------------------------------------------------------------
-    # Convenience wrappers
-    # ------------------------------------------------------------------
+    async def fetch_articles_fallback(self, query: str) -> List["NewsArticle"]:
+        """Fallback: Google News RSS — no key required, server-side only."""
+        rss_url = (
+            f"https://news.google.com/rss/search"
+            f"?q={query.replace(' ', '+')}&hl=en-US&gl=US&ceid=US:en"
+        )
+        try:
+            ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+            connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+            async with aiohttp.ClientSession(
+                connector=connector,
+                timeout=aiohttp.ClientTimeout(total=10.0),
+            ) as session:
+                async with session.get(rss_url) as resp:
+                    if resp.status == 200:
+                        return self._parse_rss(await resp.text(), query)
+        except Exception as exc:
+            logger.warning("newsdata_rss_fallback_failed query=%r error=%s", query, exc)
+        return []
+
+    def _parse_rss(self, xml_content: str, query: str = "") -> List["NewsArticle"]:
+        """Parse a Google News RSS feed into NewsArticle instances."""
+        import xml.etree.ElementTree as ET
+
+        articles: List[NewsArticle] = []
+        try:
+            root = ET.fromstring(xml_content)
+            items = root.findall(".//item")[:10]
+            for item in items:
+                title = (item.findtext("title") or "").strip()
+                url = (item.findtext("link") or "").strip()
+                pub_date = (item.findtext("pubDate") or "").strip()
+                if title and url:
+                    articles.append(
+                        NewsArticle(
+                            title=title,
+                            description=title,
+                            url=url,
+                            published_at=_parse_datetime(pub_date),
+                            source_name="Google News RSS",
+                            query=query,
+                        )
+                    )
+        except Exception as exc:
+            logger.warning("newsdata_rss_parse_failed error=%s", exc)
+        return articles
 
     async def fetch_semiconductor_news(self, limit: int = 10) -> List[NewsArticle]:
         """Shortcut for semiconductor supply-chain news."""
@@ -312,24 +309,12 @@ class NewsClient:
         )
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
 def _parse_datetime(raw: str) -> datetime:
-    """
-    Parse an ISO-8601 datetime string from NewsAPI into a UTC datetime.
-
-    NewsAPI publishes timestamps as ``"2026-03-09T12:00:00Z"``.
-    Falls back to the current UTC time when the string is absent or
-    unparseable — the article is still useful even without a precise
-    timestamp.
-    """
+    """Parse a timestamp string into a UTC datetime."""
     if not raw:
         return datetime.now(tz=timezone.utc)
     try:
-        # Python 3.11+ handles trailing Z natively; handle older too.
         return datetime.fromisoformat(raw.replace("Z", "+00:00"))
     except (ValueError, AttributeError):
-        logger.warning("newsapi_unparseable_date raw=%r", raw)
+        logger.warning("newsdata_unparseable_date raw=%r", raw)
         return datetime.now(tz=timezone.utc)

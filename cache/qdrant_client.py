@@ -64,6 +64,15 @@ class SemanticCacheClient:
         except Exception as e:
             logger.error("qdrant_init_error", error=str(e))
             return False
+
+    def health(self) -> bool:
+        """Run a lightweight Qdrant health check without loading embeddings."""
+        try:
+            self._client.get_collections()
+            return True
+        except Exception as e:
+            logger.error("qdrant_health_error", error=str(e))
+            return False
     
     def embed_text(self, text: str) -> List[float]:
         """Generate embedding for text"""

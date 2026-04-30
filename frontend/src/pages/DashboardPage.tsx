@@ -1,6 +1,13 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LineChart, Search, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  LineChart,
+  Menu,
+  Search,
+  TrendingDown,
+  TrendingUp,
+  X,
+} from "lucide-react";
 import { QuoteData, mcpApi } from "../services/api";
 import { formatNumber } from "../lib/utils";
 import {
@@ -37,42 +44,25 @@ const fallbackIndianOverview: IndianOverview = {
   sensexChange: 0.44,
 };
 
-const aiInsightCards = [
-  {
-    title: "Semiconductor Production Risk",
-    impact: "Impact: Apple, NVIDIA, AMD",
-  },
-  {
-    title: "Oil Supply Disruption",
-    impact: "Impact: Energy companies, Airlines",
-  },
-  {
-    title: "Interest Rate Change",
-    impact: "Impact: Banking and Tech sectors",
-  },
-];
-
-const marketEvents = [
-  {
-    title: "Semiconductor Supply Alert",
-    description: "Potential production disruptions detected in Taiwan.",
-    severity: "High",
-    time: "2 hours ago",
-  },
-  {
-    title: "Crude Oil Inventory Shock",
-    description: "Inventory drawdown exceeds consensus estimates.",
-    severity: "Medium",
-    time: "4 hours ago",
-  },
-  {
-    title: "Rupee Volatility Watch",
-    description:
-      "USD/INR movement is increasing import cost sensitivity across sectors.",
-    severity: "Low",
-    time: "5 hours ago",
-  },
-];
+const QuoteCardSkeleton: React.FC = () => (
+  <div className="fin-panel p-6">
+    <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1.1fr_2fr]">
+      <div className="space-y-5">
+        <div className="h-4 w-20 animate-pulse rounded bg-white/10" />
+        <div className="h-9 w-40 animate-pulse rounded bg-white/10" />
+        <div className="grid grid-cols-2 gap-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-14 animate-pulse rounded bg-white/10"
+            />
+          ))}
+        </div>
+      </div>
+      <div className="h-[240px] animate-pulse rounded-xl bg-white/10" />
+    </div>
+  </div>
+);
 
 const formatINR = (value: number) =>
   new Intl.NumberFormat("en-IN", {
@@ -101,110 +91,84 @@ const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [marketScope, setMarketScope] = useState<MarketScope>("us");
   const [usdInrRate, setUsdInrRate] = useState(82.94);
   const [indianOverview, setIndianOverview] = useState<IndianOverview>(
     fallbackIndianOverview,
   );
 
-  const getUsdInrRate = async () => {
-    try {
-      const primary = await fetch(
-        "https://api.exchangerate.host/latest?base=USD&symbols=INR",
-      );
-      const primaryJson = await primary.json();
-      const primaryRate = Number(primaryJson?.rates?.INR);
-      if (Number.isFinite(primaryRate) && primaryRate > 0) {
-        return primaryRate;
-      }
-    } catch {
-      // fallback used below
-    }
+  // ── Live Indian Market Overview (server-proxied, no CORS) ──────────────────
+  const [indicesLoading, setIndicesLoading] = useState(true);
 
+  const fetchIndices = useCallback(async () => {
     try {
-      const fallback = await fetch("https://open.er-api.com/v6/latest/USD");
-      const fallbackJson = await fallback.json();
-      const fallbackRate = Number(fallbackJson?.rates?.INR);
-      if (Number.isFinite(fallbackRate) && fallbackRate > 0) {
-        return fallbackRate;
+      const data = await mcpApi.getMarketIndices();
+      const niftyPrice = data.nifty?.price;
+      const sensexPrice = data.sensex?.price;
+      if (niftyPrice) {
+        setIndianOverview({
+          nifty: niftyPrice,
+          niftyChange: data.nifty?.change_pct ?? 0,
+          sensex: sensexPrice ?? fallbackIndianOverview.sensex,
+          sensexChange: data.sensex?.change_pct ?? 0,
+        });
       }
+      if (data.usd_inr) setUsdInrRate(data.usd_inr);
     } catch {
-      // keep existing rate
+      /* keep fallback values */
+    } finally {
+      setIndicesLoading(false);
     }
-
-    return usdInrRate;
-  };
-
-  const getYahooIndex = async (symbol: string) => {
-    try {
-      const response = await fetch(
-        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}`,
-      );
-      const json = await response.json();
-      const meta = json?.chart?.result?.[0]?.meta;
-      const price = Number(meta?.regularMarketPrice);
-      const previousClose = Number(meta?.previousClose);
-      if (
-        !Number.isFinite(price) ||
-        !Number.isFinite(previousClose) ||
-        previousClose === 0
-      ) {
-        return null;
-      }
-      const change = ((price - previousClose) / previousClose) * 100;
-      return { price, change };
-    } catch {
-      return null;
-    }
-  };
+  }, []);
 
   useEffect(() => {
-    let mounted = true;
+    fetchIndices();
+    const id = setInterval(fetchIndices, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [fetchIndices]);
 
-    const refreshGlobalRatesAndIndia = async () => {
-      const [rate, nifty, sensex] = await Promise.all([
-        getUsdInrRate(),
-        getYahooIndex("^NSEI"),
-        getYahooIndex("^BSESN"),
-      ]);
-
-      if (!mounted) return;
-
-      setUsdInrRate(rate);
-      setIndianOverview({
-        nifty: nifty?.price ?? fallbackIndianOverview.nifty,
-        niftyChange: nifty?.change ?? fallbackIndianOverview.niftyChange,
-        sensex: sensex?.price ?? fallbackIndianOverview.sensex,
-        sensexChange: sensex?.change ?? fallbackIndianOverview.sensexChange,
-      });
-    };
-
-    void refreshGlobalRatesAndIndia();
-    const interval = setInterval(refreshGlobalRatesAndIndia, 5 * 60 * 1000);
-
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // ── Crypto symbol list ─────────────────────────────────────────────────────
+  const CRYPTO_LIST = ["BTC", "ETH", "BNB", "SOL", "XRP", "ADA", "DOGE"];
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchSymbol.trim()) return;
 
+    const upper = searchSymbol.trim().toUpperCase();
     setLoading(true);
     setError(null);
 
     try {
-      const response = await mcpApi.getQuote(searchSymbol, 60);
-      if (response.success && response.data) {
-        setQuoteData(response.data);
+      if (CRYPTO_LIST.includes(upper)) {
+        // Route crypto through Binance proxy (no CORS, no auth needed)
+        const data = await mcpApi.getCryptoQuote(upper);
+        setQuoteData({
+          symbol: data.symbol,
+          price: data.price_usd,
+          inr_price: data.inr_price,
+          usd_inr_rate: usdInrRate,
+          timestamp: data.timestamp,
+          data_source: data.source,
+          cache_hit: false,
+          latency_ms: 0,
+          high: data.high_24h,
+          low: data.low_24h,
+          volume: data.volume,
+        });
       } else {
-        setError(response.error || "Failed to fetch quote");
+        const response = await mcpApi.getQuote(upper, 60);
+        if (response.success && response.data) {
+          setQuoteData(response.data);
+          if (response.data.usd_inr_rate) {
+            setUsdInrRate(response.data.usd_inr_rate);
+          }
+        } else {
+          setError(response.error || "Failed to fetch quote");
+        }
       }
-    } catch (err: any) {
-      setError(err.message || "Network error occurred");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Network error occurred");
     } finally {
       setLoading(false);
     }
@@ -218,10 +182,11 @@ const DashboardPage: React.FC = () => {
     for (let i = 30; i >= 0; i--) {
       const variance = (Math.random() - 0.5) * 5;
       const usd = basePriceUsd + variance;
+      const inrBase = quoteData.inr_price ?? quoteData.price;
       data.push({
         time: `${i}d ago`,
         priceUsd: usd,
-        priceInr: usd * usdInrRate,
+        priceInr: inrBase + variance * (quoteData.usd_inr_rate ?? usdInrRate),
       });
     }
 
@@ -253,24 +218,18 @@ const DashboardPage: React.FC = () => {
       return [
         {
           name: "Bitcoin",
-          value: 97453.32 * usdInrRate,
-          usdValue: 97453.32,
+          value: 97453.32,
           change: 3.12,
-          isCurrency: true,
         },
         {
           name: "Ethereum",
-          value: 4210.24 * usdInrRate,
-          usdValue: 4210.24,
+          value: 4210.24,
           change: 2.41,
-          isCurrency: true,
         },
         {
           name: "Solana",
-          value: 197.42 * usdInrRate,
-          usdValue: 197.42,
+          value: 197.42,
           change: -1.09,
-          isCurrency: true,
         },
       ];
     }
@@ -285,10 +244,8 @@ const DashboardPage: React.FC = () => {
       },
       {
         name: "Bitcoin",
-        value: 97453.32 * usdInrRate,
-        usdValue: 97453.32,
+        value: 97453.32,
         change: 3.12,
-        isCurrency: true,
       },
     ];
   }, [indianOverview, marketScope, usdInrRate]);
@@ -307,10 +264,11 @@ const DashboardPage: React.FC = () => {
 
   const handleNav = (tab: string, targetId: string) => {
     setActiveTab(tab);
+    setMobileNavOpen(false);
     document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const quoteInrPrice = quoteData ? quoteData.price * usdInrRate : null;
+  const quoteInrPrice = quoteData ? (quoteData.inr_price ?? null) : null;
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -373,12 +331,44 @@ const DashboardPage: React.FC = () => {
             </button>
           </nav>
           <button
+            type="button"
+            onClick={() => setMobileNavOpen((open) => !open)}
+            className="rounded-lg border border-white/10 p-2 text-white md:hidden"
+            aria-label="Toggle navigation"
+          >
+            {mobileNavOpen ? (
+              <X className="h-5 w-5" />
+            ) : (
+              <Menu className="h-5 w-5" />
+            )}
+          </button>
+          <button
             onClick={() => navigate("/")}
             className="rounded-xl bg-[#4A70A9] px-4 py-2 text-sm font-medium text-white transition duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.03]"
           >
             Home
           </button>
         </div>
+        {mobileNavOpen ? (
+          <nav className="mx-auto flex max-w-[1280px] flex-col gap-2 px-6 pb-4 text-sm md:hidden">
+            {[
+              ["overview", "Overview"],
+              ["market", "Market Data"],
+              ["insights", "AI Insights"],
+              ["news", "News Events"],
+            ].map(([tab, label]) => (
+              <button
+                key={tab}
+                onClick={() => handleNav(tab, tab)}
+                className={`rounded-lg px-3 py-2 text-left ${
+                  activeTab === tab ? "bg-white/10 text-white" : "text-white/70"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+        ) : null}
       </header>
 
       <main className="mx-auto max-w-[1280px] space-y-12 px-6 py-12 sm:px-8">
@@ -418,7 +408,7 @@ const DashboardPage: React.FC = () => {
           <div className="grid grid-cols-1 gap-7 md:grid-cols-2 xl:grid-cols-4">
             {overviewCards.map((index, idx) => {
               const isPositive = index.change >= 0;
-              const changeColor = isPositive ? "#8FABD4" : "#ff6b6b";
+              const changeColor = isPositive ? "#24a148" : "#da1e28";
               return (
                 <div key={index.name} className="fin-panel p-6">
                   <div className="flex items-start justify-between">
@@ -448,8 +438,8 @@ const DashboardPage: React.FC = () => {
                       className="flex h-9 w-9 items-center justify-center rounded-full"
                       style={{
                         background: isPositive
-                          ? "rgba(143,171,212,0.2)"
-                          : "rgba(255,107,107,0.15)",
+                          ? "rgba(36,161,72,0.18)"
+                          : "rgba(218,30,40,0.15)",
                       }}
                     >
                       {isPositive ? (
@@ -506,7 +496,7 @@ const DashboardPage: React.FC = () => {
                 className="mt-2 text-sm"
                 style={{
                   color:
-                    indianOverview.niftyChange >= 0 ? "#8FABD4" : "#ff6b6b",
+                    indianOverview.niftyChange >= 0 ? "#24a148" : "#da1e28",
                 }}
               >
                 {indianOverview.niftyChange >= 0 ? "+" : ""}
@@ -524,7 +514,7 @@ const DashboardPage: React.FC = () => {
                 className="mt-2 text-sm"
                 style={{
                   color:
-                    indianOverview.sensexChange >= 0 ? "#8FABD4" : "#ff6b6b",
+                    indianOverview.sensexChange >= 0 ? "#24a148" : "#da1e28",
                 }}
               >
                 {indianOverview.sensexChange >= 0 ? "+" : ""}
@@ -539,7 +529,7 @@ const DashboardPage: React.FC = () => {
                 {usdInrRate.toFixed(2)}
               </p>
               <p className="mt-2 text-xs text-white/60">
-                Live reference FX rate
+                Live rate via open.er-api.com
               </p>
             </div>
           </div>
@@ -579,9 +569,8 @@ const DashboardPage: React.FC = () => {
             {[
               ["Apple", "AAPL"],
               ["Tesla", "TSLA"],
-              ["Reliance", "RELIANCE.NS"],
-              ["TCS", "TCS.NS"],
-              ["Bitcoin", "BTC"],
+              ["Ethereum", "ETH-USD"],
+              ["Bitcoin", "BTC-USD"],
             ].map(([name, symbol]) => (
               <button
                 key={symbol}
@@ -599,219 +588,192 @@ const DashboardPage: React.FC = () => {
             </div>
           )}
 
-          <div className="fin-panel p-6">
-            <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1.1fr_2fr]">
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <p className="text-xs uppercase tracking-[0.2em] text-white/60">
-                    Price
-                  </p>
-                  <div className="text-3xl font-semibold">
-                    {quoteInrPrice ? formatINR(quoteInrPrice) : "--"}
-                  </div>
-                  <div className="text-sm text-white/70">
-                    {quoteData?.symbol || "Awaiting symbol search"}
-                  </div>
-                  {quoteData ? (
-                    <p className="text-sm text-white/60">
-                      {formatUSD(quoteData.price)} USD
+          {loading ? (
+            <QuoteCardSkeleton />
+          ) : (
+            <div className="fin-panel p-6">
+              <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1.1fr_2fr]">
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-[0.2em] text-white/60">
+                      Price
                     </p>
-                  ) : null}
-                  {quoteData ? <p className="text-xs text-white/50"></p> : null}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div className="space-y-1">
-                    <p className="text-white/60">Open</p>
-                    <p className="font-medium">
-                      {quoteData?.open
-                        ? formatINR(quoteData.open * usdInrRate)
-                        : "--"}
-                    </p>
+                    <div className="text-3xl font-semibold">
+                      {quoteInrPrice ? formatINR(quoteInrPrice) : "₹ N/A"}
+                    </div>
+                    <div className="text-sm text-white/70">
+                      {quoteData?.symbol || "Awaiting symbol search"}
+                    </div>
+                    {quoteData ? (
+                      <p className="text-sm text-white/60">
+                        {formatUSD(quoteData.price)} USD
+                      </p>
+                    ) : null}
+                    {quoteData ? (
+                      <p className="text-xs text-white/50"></p>
+                    ) : null}
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-white/60">High</p>
-                    <p className="font-medium">
-                      {quoteData?.high
-                        ? formatINR(quoteData.high * usdInrRate)
-                        : "--"}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-white/60">Low</p>
-                    <p className="font-medium">
-                      {quoteData?.low
-                        ? formatINR(quoteData.low * usdInrRate)
-                        : "--"}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-white/60">Latency</p>
-                    <p className="font-medium">
-                      {quoteData?.latency_ms
-                        ? `${quoteData.latency_ms} ms`
-                        : "--"}
-                    </p>
-                  </div>
-                </div>
 
-                <div className="text-xs text-white/50">
-                  {quoteData?.cache_hit
-                    ? "Cached response"
-                    : "Live market feed (USD source, INR display)"}
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm font-medium text-white/90">
-                    <LineChart className="h-4 w-4" />
-                    Price Trend
-                  </div>
-                  <div className="flex gap-2">
-                    {["1D", "1W", "1M", "1Y"].map((period) => (
-                      <button
-                        key={period}
-                        className="rounded-lg border border-white/10 px-3 py-1 text-xs text-white/70 transition hover:border-[#8FABD4] hover:text-white"
-                      >
-                        {period}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="h-[240px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RechartsLineChart data={chartData}>
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke="rgba(255,255,255,0.06)"
-                      />
-                      <XAxis
-                        dataKey="time"
-                        stroke="rgba(255,255,255,0.4)"
-                        style={{ fontSize: "12px" }}
-                      />
-                      <YAxis
-                        stroke="rgba(255,255,255,0.4)"
-                        style={{ fontSize: "12px" }}
-                        domain={["auto", "auto"]}
-                        tickFormatter={(value: number) =>
-                          formatInrCompact(value)
-                        }
-                        label={{
-                          value: "Price (INR)",
-                          angle: -90,
-                          position: "insideLeft",
-                          fill: "rgba(255,255,255,0.65)",
-                          style: { fontSize: "11px" },
-                        }}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "rgba(0,0,0,0.85)",
-                          border: "1px solid rgba(255,255,255,0.1)",
-                          borderRadius: "10px",
-                          color: "white",
-                        }}
-                        formatter={(value: any, _name: any, item: any) => {
-                          const usdValue = item?.payload?.priceUsd;
-                          return [
-                            `${formatINR(Number(value))} (≈ ${formatUSD(Number(usdValue))})`,
-                            "Price",
-                          ];
-                        }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="priceInr"
-                        stroke="#4A70A9"
-                        strokeWidth={2}
-                        dot={false}
-                        activeDot={{ r: 4, fill: "#8FABD4" }}
-                      />
-                    </RechartsLineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="insights" className="space-y-8">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-[20px] font-semibold">AI Market Insights</h2>
-              <p className="text-[15px] leading-6 text-white/70">
-                Analyze how global events and supply chain disruptions may
-                affect companies and industries.
-              </p>
-            </div>
-            <button
-              onClick={() => navigate("/chat")}
-              className="rounded-xl bg-[#4A70A9] px-5 py-2.5 text-sm font-medium text-white transition duration-200 ease-out hover:-translate-y-0.5"
-            >
-              Run AI Analysis
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 gap-7 md:grid-cols-2 xl:grid-cols-3">
-            {aiInsightCards.map((card) => (
-              <div key={card.title} className="fin-panel p-6">
-                <h3 className="text-base font-semibold text-white">
-                  {card.title}
-                </h3>
-                <p className="mt-3 text-sm leading-6 text-white/70">
-                  {card.impact}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section id="news" className="space-y-8">
-          <div>
-            <h2 className="text-[20px] font-semibold">Recent Market Events</h2>
-            <p className="text-[15px] leading-6 text-white/70">
-              Intelligence alerts highlighting market-moving developments.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-7 md:grid-cols-2">
-            {marketEvents.map((event) => {
-              const severityColor =
-                event.severity === "High"
-                  ? "#ff6b6b"
-                  : event.severity === "Medium"
-                    ? "#f59e0b"
-                    : "#8FABD4";
-              return (
-                <div key={event.title} className="fin-panel p-6">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="text-base font-semibold text-white">
-                        {event.title}
-                      </h3>
-                      <p className="mt-3 text-sm leading-6 text-white/70">
-                        {event.description}
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="space-y-1">
+                      <p className="text-white/60">Open</p>
+                      <p className="font-medium">
+                        {quoteData?.open
+                          ? quoteData.inr_open
+                            ? formatINR(quoteData.inr_open)
+                            : "₹ N/A"
+                          : "--"}
                       </p>
                     </div>
-                    <span
-                      className="rounded-full px-3 py-1 text-xs font-medium"
-                      style={{
-                        background: `${severityColor}20`,
-                        color: severityColor,
-                      }}
-                    >
-                      {event.severity}
-                    </span>
+                    <div className="space-y-1">
+                      <p className="text-white/60">High</p>
+                      <p className="font-medium">
+                        {quoteData?.high
+                          ? quoteData.inr_high
+                            ? formatINR(quoteData.inr_high)
+                            : "₹ N/A"
+                          : "--"}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-white/60">Low</p>
+                      <p className="font-medium">
+                        {quoteData?.low
+                          ? quoteData.inr_low
+                            ? formatINR(quoteData.inr_low)
+                            : "₹ N/A"
+                          : "--"}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-white/60">Latency</p>
+                      <p className="font-medium">
+                        {quoteData?.latency_ms
+                          ? `${Number(quoteData.latency_ms).toFixed(2)} ms`
+                          : "--"}
+                      </p>
+                    </div>
                   </div>
-                  <div className="mt-4 text-xs text-white/50">
-                    Severity: {event.severity} | Time: {event.time}
+
+                  <div className="text-xs text-white/50">
+                    {quoteData?.cache_hit
+                      ? "Cached response"
+                      : "Live market feed (USD source, INR display)"}
+                  </div>
+                  {quoteData ? (
+                    <div className="text-xs text-white/50">
+                      Last updated:{" "}
+                      {new Date(quoteData.timestamp).toLocaleString()}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm font-medium text-white/90">
+                      <LineChart className="h-4 w-4" />
+                      Price Trend
+                    </div>
+                    <div className="flex gap-2">
+                      {["1D", "1W", "1M", "1Y"].map((period) => (
+                        <button
+                          key={period}
+                          className="rounded-lg border border-white/10 px-3 py-1 text-xs text-white/70 transition hover:border-[#8FABD4] hover:text-white"
+                        >
+                          {period}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="h-[240px]">
+                    {chartData.length === 0 ? (
+                      <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-white/10 text-center text-white/50">
+                        <LineChart className="mb-3 h-8 w-8" />
+                        <p className="text-sm">
+                          Search for a symbol above to view the chart
+                        </p>
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RechartsLineChart data={chartData}>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="rgba(255,255,255,0.06)"
+                          />
+                          <XAxis
+                            dataKey="time"
+                            stroke="rgba(255,255,255,0.4)"
+                            style={{ fontSize: "12px" }}
+                          />
+                          <YAxis
+                            stroke="rgba(255,255,255,0.4)"
+                            style={{ fontSize: "12px" }}
+                            domain={["auto", "auto"]}
+                            tickFormatter={(value: number) =>
+                              formatInrCompact(value)
+                            }
+                            label={{
+                              value: "Price (INR)",
+                              angle: -90,
+                              position: "insideLeft",
+                              fill: "rgba(255,255,255,0.65)",
+                              style: { fontSize: "11px" },
+                            }}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "rgba(0,0,0,0.85)",
+                              border: "1px solid rgba(255,255,255,0.1)",
+                              borderRadius: "10px",
+                              color: "white",
+                            }}
+                            formatter={(
+                              value:
+                                | string
+                                | number
+                                | readonly (string | number)[]
+                                | undefined,
+                              _name: string | number | undefined,
+                              item: { payload?: { priceUsd?: number } },
+                            ) => {
+                              const usdValue = item.payload?.priceUsd;
+                              return [
+                                `${formatINR(Number(value))} (≈ ${formatUSD(Number(usdValue))})`,
+                                "Price",
+                              ];
+                            }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="priceInr"
+                            stroke="#4A70A9"
+                            strokeWidth={2}
+                            dot={false}
+                            activeDot={{ r: 4, fill: "#8FABD4" }}
+                          />
+                        </RechartsLineChart>
+                      </ResponsiveContainer>
+                    )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            </div>
+          )}
         </section>
+
+        {/* Market Intelligence CTA — replaces AI Market Insights + Recent Market Events */}
+        <div className="market-intelligence-cta">
+          <div className="cta-content">
+            <h3>AI Market Intelligence</h3>
+            <p>
+              Ask about supply chain risks, company analysis, live news impact,
+              and multi-agent investment theses.
+            </p>
+          </div>
+          <button className="btn-primary" onClick={() => navigate("/chat")}>
+            Open AI Analyst →
+          </button>
+        </div>
       </main>
     </div>
   );

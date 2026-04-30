@@ -267,8 +267,8 @@ def live_client():
         yield c
 
 
-@pytest.fixture(scope="module", autouse=True)
-def seed_graph():
+@pytest.fixture(scope="module")
+def seed_graph(live_client):
     """Insert test fixtures into the live graph before the module runs."""
     from nebula3.gclient.net import ConnectionPool
     from nebula3.Config import Config
@@ -305,6 +305,7 @@ def seed_graph():
 
 
 @nebula_required
+@pytest.mark.usefixtures("seed_graph")
 class TestQueryIntegration:
     """Execute every query template with mock parameters against live graph."""
 

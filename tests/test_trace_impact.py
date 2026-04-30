@@ -28,6 +28,8 @@ Run
 from __future__ import annotations
 
 import pytest
+from unittest.mock import MagicMock
+
 from nebula3.gclient.net import ConnectionPool
 from nebula3.Config import Config
 
@@ -65,12 +67,28 @@ def _root_exec(stmt: str) -> None:
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
+def mock_client():
+    """
+    SecureGraphClient with a fake pool — for validation tests that raise
+    ValueError before any real graph interaction.
+    """
+    c = SecureGraphClient(host="127.0.0.1", port=9669)
+    fake_pool = MagicMock()
+    fake_session = MagicMock()
+    fake_session.execute.return_value = MagicMock(is_succeeded=lambda: True)
+    fake_pool.get_session.return_value = fake_session
+    c._pool = fake_pool
+    return c
+
+
+@pytest.fixture(scope="module")
 def client():
+    """Live SecureGraphClient — requires running NebulaGraph."""
     with SecureGraphClient(host="127.0.0.1", port=9669) as c:
         yield c
 
 
-@pytest.fixture(scope="module", autouse=True)
+@pytest.fixture(scope="module")
 def seed_graph():
     """Insert TSMC shock topology before any test in this module runs."""
     vids_csv = ", ".join(f'"{v}"' for v in _ALL)
@@ -116,37 +134,45 @@ def seed_graph():
 # ---------------------------------------------------------------------------
 
 class TestTraceImpactValidation:
+    """
+    Input-validation tests — raise ValueError before touching NebulaGraph.
+    Uses mock_client so they run without a live graph.
+    """
 
-    def test_empty_ticker_raises(self, client: SecureGraphClient):
+    def test_empty_ticker_raises(self, mock_client: SecureGraphClient):
         with pytest.raises(ValueError, match="target_ticker"):
-            client.trace_impact("")
+            mock_client.trace_impact("")
 
-    def test_invalid_ticker_chars_raises(self, client: SecureGraphClient):
+    def test_invalid_ticker_chars_raises(self, mock_client: SecureGraphClient):
         with pytest.raises(ValueError, match="target_ticker"):
-            client.trace_impact("TSMC Corp!")
+            mock_client.trace_impact("TSMC Corp!")
 
-    def test_ticker_too_long_raises(self, client: SecureGraphClient):
+    def test_ticker_too_long_raises(self, mock_client: SecureGraphClient):
         with pytest.raises(ValueError, match="target_ticker"):
-            client.trace_impact("T" * 65)
+            mock_client.trace_impact("T" * 65)
 
-    def test_max_hops_zero_raises(self, client: SecureGraphClient):
+    def test_max_hops_zero_raises(self, mock_client: SecureGraphClient):
         with pytest.raises(ValueError, match="max_hops"):
-            client.trace_impact("TSMC_TI", max_hops=0)
+            mock_client.trace_impact("TSMC_TI", max_hops=0)
 
-    def test_max_hops_too_large_raises(self, client: SecureGraphClient):
+    def test_max_hops_too_large_raises(self, mock_client: SecureGraphClient):
         with pytest.raises(ValueError, match="max_hops"):
-            client.trace_impact("TSMC_TI", max_hops=6)
+            mock_client.trace_impact("TSMC_TI", max_hops=6)
 
-    def test_max_hops_non_int_raises(self, client: SecureGraphClient):
+    def test_max_hops_non_int_raises(self, mock_client: SecureGraphClient):
         with pytest.raises(ValueError, match="max_hops"):
-            client.trace_impact("TSMC_TI", max_hops=2.5)  # type: ignore[arg-type]
+            mock_client.trace_impact("TSMC_TI", max_hops=2.5)  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
 # Return type contract
 # ---------------------------------------------------------------------------
 
+@pytest.mark.integration
 class TestTraceImpactReturnType:
+    """
+    Return-type contract tests — require a live graph with the seeded topology.
+    """
 
     def test_returns_list(self, client: SecureGraphClient):
         result = client.trace_impact(_TSMC, max_hops=1)
@@ -175,6 +201,7 @@ class TestTraceImpactReturnType:
 # ---------------------------------------------------------------------------
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("seed_graph")
 class TestTraceTsmcShock:
 
     def test_no_impact_on_unknown_ticker(self, client: SecureGraphClient):

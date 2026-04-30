@@ -4,6 +4,33 @@
 
 @layer base {
   :root {
+    --color-primary: #0f62fe;
+    --color-primary-hover: #0353e9;
+    --color-secondary: #6f6f6f;
+    --color-accent: #08bdba;
+    --color-bg-base: #0a0a0f;
+    --color-bg-surface: #111118;
+    --color-bg-card: #16161f;
+    --color-bg-card-hover: #1e1e2a;
+    --color-text-primary: #f4f4f4;
+    --color-text-secondary: #a8a8b3;
+    --color-text-muted: #6f6f7a;
+    --color-success: #24a148;
+    --color-warning: #f1c21b;
+    --color-danger: #da1e28;
+    --color-bull: #24a148;
+    --color-bear: #da1e28;
+    --color-border: #282836;
+    --color-border-subtle: #1e1e2a;
+    --font-sans: "Inter", "SF Pro Display", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "Fira Code", monospace;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
+    --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.5);
+
     --radius: 1rem;
     
     /* Fintech Dark Theme */
@@ -169,7 +196,7 @@
 
 .hero-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.34);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.34), 0 0 24px rgba(8, 189, 186, 0.18);
   border-color: rgba(143, 171, 212, 0.22);
 }
 
@@ -207,6 +234,27 @@
   animation-delay: 0.24s;
 }
 
+.error-boundary {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+  padding: 24px;
+  text-align: center;
+}
+
+.error-boundary button {
+  border: 1px solid var(--color-border);
+  background: var(--color-primary);
+  color: white;
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+}
+
 /* Animation for the AI chat */
 .lab-bg::before {
   overflow: hidden;
@@ -232,3 +280,193 @@
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-[rgb(var(--text-muted))];
 }
+
+/* =========================================================
+   Market Intelligence CTA banner (Fix 3)
+   ========================================================= */
+.market-intelligence-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28px 32px;
+  background: linear-gradient(135deg, #111118 0%, #16161f 100%);
+  border: 1px solid #282836;
+  border-left: 4px solid #0f62fe;
+  border-radius: 12px;
+  margin-top: 32px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.market-intelligence-cta h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #f4f4f4;
+  margin: 0 0 6px 0;
+}
+.market-intelligence-cta p {
+  font-size: 14px;
+  color: #a8a8b3;
+  margin: 0;
+  max-width: 520px;
+}
+.cta-content { flex: 1; }
+
+.btn-primary {
+  display: inline-block;
+  padding: 12px 24px;
+  background: #0f62fe;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.btn-primary:hover {
+  background: #0353e9;
+  transform: translateY(-1px);
+}
+
+/* =========================================================
+   Structured Analysis Message — Fix 4
+   ========================================================= */
+
+/* Verdict strip */
+.verdict-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  background: #16161f;
+  border: 1px solid #282836;
+  border-left: 4px solid;
+  border-radius: 12px 12px 0 0;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.verdict-badge {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+.conviction-label, .horizon-label {
+  font-size: 13px;
+  color: #a8a8b3;
+  margin-left: 12px;
+}
+.verdict-left { display: flex; align-items: center; }
+.confidence-meter { display: flex; align-items: center; gap: 8px; }
+.confidence-bar-track {
+  width: 120px; height: 6px;
+  background: #282836; border-radius: 3px; overflow: hidden;
+}
+.confidence-bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+.confidence-value { font-size: 13px; font-weight: 600; color: #f4f4f4; }
+
+/* Summary */
+.analysis-summary {
+  padding: 20px 24px;
+  background: #111118;
+  border-left: 1px solid #282836;
+  border-right: 1px solid #282836;
+}
+.analysis-summary p { font-size: 15px; color: #c8c8d0; line-height: 1.7; margin: 0; }
+
+/* Thesis grid */
+.thesis-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: #282836;
+}
+@media (max-width: 768px) { .thesis-grid { grid-template-columns: 1fr; } }
+
+.thesis-card {
+  padding: 20px 24px;
+  background: #111118;
+}
+.thesis-card.bull { border-top: 2px solid #24a148; }
+.thesis-card.bear { border-top: 2px solid #da1e28; }
+
+.thesis-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}
+.thesis-header h4 { font-size: 14px; font-weight: 600; color: #f4f4f4; margin: 0; flex: 1; }
+.thesis-icon { font-size: 12px; }
+.thesis-card.bull .thesis-icon { color: #24a148; }
+.thesis-card.bear .thesis-icon { color: #da1e28; }
+.thesis-confidence { font-size: 13px; font-weight: 700; }
+.thesis-card.bull .thesis-confidence { color: #24a148; }
+.thesis-card.bear .thesis-confidence { color: #da1e28; }
+
+.confidence-mini-bar {
+  height: 3px; background: #282836;
+  border-radius: 2px; overflow: hidden; margin-bottom: 14px;
+}
+.confidence-mini-bar div { height: 100%; border-radius: 2px; }
+
+.thesis-reasoning { font-size: 13px; color: #a8a8b3; line-height: 1.6; margin: 0 0 14px 0; }
+
+.driver-list { list-style: none; padding: 0; margin: 0; }
+.driver-list li {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 13px; color: #c8c8d0; padding: 5px 0;
+  border-bottom: 1px solid #1e1e2a;
+}
+.driver-list li:last-child { border-bottom: none; }
+.bull-drivers li span { color: #24a148; font-size: 10px; padding-top: 3px; flex-shrink: 0; }
+.bear-drivers li span { color: #da1e28; font-size: 10px; padding-top: 3px; flex-shrink: 0; }
+
+/* Conclusion */
+.analysis-conclusion {
+  padding: 18px 24px;
+  background: #16161f;
+  border: 1px solid #282836;
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+}
+.analysis-conclusion h4 {
+  font-size: 13px; font-weight: 600; color: #a8a8b3;
+  margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.analysis-conclusion p { font-size: 14px; color: #c8c8d0; line-height: 1.6; margin: 0; }
+
+/* Wrapper */
+.structured-analysis-wrapper {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* =========================================================
+   Plain markdown chat bubble — Fix 4
+   ========================================================= */
+.chat-markdown {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #c8c8d0;
+}
+.chat-markdown strong { color: #f4f4f4; }
+.chat-markdown ul, .chat-markdown ol { padding-left: 20px; }
+.chat-markdown code {
+  background: #1e1e2a;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: #c8c8d0;
+}
+.chat-markdown pre {
+  background: #1e1e2a;
+  border-radius: 8px;
+  padding: 16px;
+  overflow: auto;
+  font-size: 13px;
+}
+

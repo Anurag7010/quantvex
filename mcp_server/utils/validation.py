@@ -11,7 +11,7 @@ logger = get_logger(__name__)
 class InputValidator:
     """Validates and sanitizes input parameters"""
     
-    SYMBOL_PATTERN = re.compile(r'^[A-Z0-9]{1,20}$', re.IGNORECASE)
+    SYMBOL_PATTERN = re.compile(r'^[A-Z0-9_.\-]{1,64}$', re.IGNORECASE)
     EXCHANGE_PATTERN = re.compile(r'^[A-Z0-9_]{1,20}$', re.IGNORECASE)
     
     VALID_TOOLS = {
@@ -22,6 +22,12 @@ class InputValidator:
         "multi_agent_analysis",
     }
     VALID_CHANNELS = {"trades", "quotes"}
+    VALID_COMMODITY_VIDS = {
+        "CRUDE_OIL", "NATURAL_GAS", "COAL", "SEMICONDUCTOR_WAFER",
+        "LITHIUM", "COBALT", "COPPER", "RARE_EARTH", "ALUMINUM", "STEEL",
+        "CORN", "WHEAT", "SOYBEANS", "COFFEE", "SUGAR", "PALM_OIL",
+        "SHIPPING_CONTAINERS", "SEMICONDUCTOR_CHIPS", "SILICON", "NEON_GAS",
+    }
     
     @classmethod
     def validate_symbol(cls, symbol: str) -> str:
@@ -35,6 +41,14 @@ class InputValidator:
         
         logger.debug("symbol_validated", symbol=symbol)
         return symbol
+
+    @classmethod
+    def validate_symbol_or_vid(cls, value: str) -> str:
+        """Validate a stock ticker or known commodity VID."""
+        normalized = cls.validate_symbol(value)
+        if normalized in cls.VALID_COMMODITY_VIDS:
+            return normalized
+        return normalized
     
     @classmethod
     def validate_exchange(cls, exchange: Optional[str]) -> Optional[str]:

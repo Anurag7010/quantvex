@@ -1,233 +1,252 @@
 """
-Production seed script — Phase 3 final supply-chain graph.
-
-Adds all missing downstream oil-consumer edges so that queries like
-"Iran USA war oil stocks" return meaningful cascades.
-
-Edge semantics: (A)-[:DEPENDS_ON]->(B) means A depends on B as a supplier.
-So trace_impact("XOM") finds every A such that A->...->XOM.
-
-Run inside Docker:
-    docker exec finance-mcp-server python tests/seed_production_data.py
+Production seed script for the QuantVex supply-chain graph.
 
 Run locally:
-    PYTHONPATH=src NEBULA_HOST=localhost .venv/bin/python tests/seed_production_data.py
+    PYTHONPATH=src NEBULA_HOST=localhost python3 scripts/seed_production_data.py
+
+Dry run:
+    python3 scripts/seed_production_data.py --dry-run
 """
+from __future__ import annotations
+
+import argparse
 import sys
-sys.path.insert(0, "src")
+from pathlib import Path
+from typing import Iterable
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from finance_mcp.graph.client import SecureGraphClient
 
-with SecureGraphClient() as c:
+Company = tuple[str, str, str]
+Commodity = tuple[str, str, str]
+DependsOnEdge = tuple[str, str, float]
+RequiresEdge = tuple[str, str, int]
+HistoricalEvent = tuple[str, str, str, tuple[str, ...]]
 
-    # -----------------------------------------------------------------------
-    # 1. Company vertices — full production set
-    # -----------------------------------------------------------------------
+COMPANIES: tuple[Company, ...] = (
+    ("AAPL", "Apple Inc.", "Technology"),
+    ("MSFT", "Microsoft Corporation", "Technology"),
+    ("NVDA", "NVIDIA Corporation", "Technology"),
+    ("GOOGL", "Alphabet Inc.", "Technology"),
+    ("META", "Meta Platforms Inc.", "Technology"),
+    ("AVGO", "Broadcom Inc.", "Technology"),
+    ("ORCL", "Oracle Corporation", "Technology"),
+    ("AMD", "Advanced Micro Devices", "Technology"),
+    ("QCOM", "Qualcomm Inc.", "Technology"),
+    ("TXN", "Texas Instruments", "Technology"),
+    ("AMAT", "Applied Materials", "Technology"),
+    ("MU", "Micron Technology", "Technology"),
+    ("INTC", "Intel Corporation", "Technology"),
+    ("TSMC", "Taiwan Semiconductor Mfg", "Technology"),
+    ("ASML", "ASML Holding", "Technology"),
+    ("LRCX", "Lam Research", "Technology"),
+    ("KLAC", "KLA Corporation", "Technology"),
+    ("AMZN", "Amazon.com Inc.", "Consumer Discretionary"),
+    ("TSLA", "Tesla Inc.", "Consumer Discretionary"),
+    ("HD", "Home Depot", "Consumer Discretionary"),
+    ("NKE", "Nike Inc.", "Consumer Discretionary"),
+    ("MCD", "McDonald's Corporation", "Consumer Discretionary"),
+    ("SBUX", "Starbucks Corporation", "Consumer Discretionary"),
+    ("TGT", "Target Corporation", "Consumer Discretionary"),
+    ("LLY", "Eli Lilly and Company", "Healthcare"),
+    ("UNH", "UnitedHealth Group", "Healthcare"),
+    ("JNJ", "Johnson & Johnson", "Healthcare"),
+    ("ABBV", "AbbVie Inc.", "Healthcare"),
+    ("MRK", "Merck & Co.", "Healthcare"),
+    ("PFE", "Pfizer Inc.", "Healthcare"),
+    ("TMO", "Thermo Fisher Scientific", "Healthcare"),
+    ("DHR", "Danaher Corporation", "Healthcare"),
+    ("BRK_B", "Berkshire Hathaway", "Financials"),
+    ("JPM", "JPMorgan Chase", "Financials"),
+    ("V", "Visa Inc.", "Financials"),
+    ("MA", "Mastercard Inc.", "Financials"),
+    ("BAC", "Bank of America", "Financials"),
+    ("GS", "Goldman Sachs", "Financials"),
+    ("MS", "Morgan Stanley", "Financials"),
+    ("BLK", "BlackRock Inc.", "Financials"),
+    ("XOM", "ExxonMobil Corporation", "Energy"),
+    ("CVX", "Chevron Corporation", "Energy"),
+    ("COP", "ConocoPhillips", "Energy"),
+    ("SLB", "SLB (Schlumberger)", "Energy"),
+    ("CAT", "Caterpillar Inc.", "Industrials"),
+    ("BA", "Boeing Company", "Industrials"),
+    ("GE", "GE Aerospace", "Industrials"),
+    ("HON", "Honeywell International", "Industrials"),
+    ("RTX", "RTX Corporation", "Industrials"),
+    ("DE", "Deere & Company", "Industrials"),
+    ("LMT", "Lockheed Martin", "Industrials"),
+    ("FCX", "Freeport-McMoRan", "Materials"),
+    ("PG", "Procter & Gamble", "Consumer Staples"),
+    ("KO", "Coca-Cola Company", "Consumer Staples"),
+    ("PEP", "PepsiCo Inc.", "Consumer Staples"),
+    ("WMT", "Walmart Inc.", "Consumer Staples"),
+    ("COST", "Costco Wholesale", "Consumer Staples"),
+)
 
-    # --- Semiconductors / Taiwan risk ---
-    c.insert_company('TSMC',  'Taiwan Semiconductor Mfg.',  'Technology')
-    c.insert_company('AAPL',  'Apple Inc.',                  'Technology')
-    c.insert_company('NVDA',  'NVIDIA Corporation',          'Technology')
-    c.insert_company('AMD',   'Advanced Micro Devices',      'Technology')
-    c.insert_company('QCOM',  'Qualcomm Inc.',               'Technology')
-    c.insert_company('INTC',  'Intel Corporation',           'Technology')
-    c.insert_company('ASML',  'ASML Holding NV',             'Technology')
-    c.insert_company('MSFT',  'Microsoft Corporation',       'Technology')
-    c.insert_company('GOOG',  'Alphabet Inc.',               'Technology')
-    c.insert_company('META',  'Meta Platforms Inc.',         'Technology')
-    c.insert_company('AMZN',  'Amazon.com Inc.',             'Technology')
+COMMODITIES: tuple[Commodity, ...] = (
+    ("CRUDE_OIL", "Crude Oil (WTI)", "Energy"),
+    ("NATURAL_GAS", "Natural Gas", "Energy"),
+    ("COAL", "Thermal Coal", "Energy"),
+    ("SEMICONDUCTOR_WAFER", "Semiconductor Wafers", "Electronics"),
+    ("LITHIUM", "Lithium Carbonate", "Metals & Mining"),
+    ("COBALT", "Cobalt", "Metals & Mining"),
+    ("COPPER", "Copper", "Metals & Mining"),
+    ("RARE_EARTH", "Rare Earth Elements", "Metals & Mining"),
+    ("ALUMINUM", "Aluminum", "Metals & Mining"),
+    ("STEEL", "Steel (HRC)", "Metals & Mining"),
+    ("CORN", "Corn", "Agriculture"),
+    ("WHEAT", "Wheat", "Agriculture"),
+    ("SOYBEANS", "Soybeans", "Agriculture"),
+    ("COFFEE", "Coffee (Arabica)", "Agriculture"),
+    ("SUGAR", "Raw Sugar", "Agriculture"),
+    ("PALM_OIL", "Palm Oil", "Agriculture"),
+    ("SHIPPING_CONTAINERS", "Shipping Container Capacity", "Logistics"),
+    ("SEMICONDUCTOR_CHIPS", "Advanced Logic Chips", "Electronics"),
+    ("SILICON", "Polysilicon", "Electronics"),
+    ("NEON_GAS", "Neon Gas", "Electronics"),
+)
 
-    # --- EV / battery supply chain ---
-    c.insert_company('TSLA',  'Tesla Inc.',            'Automotive')
-    c.insert_company('F',     'Ford Motor Company',    'Automotive')
-    c.insert_company('GM',    'General Motors',        'Automotive')
-    c.insert_company('PCRHY', 'Panasonic Holdings',    'Automotive')
-    c.insert_company('ALB',   'Albemarle Corp.',       'Materials')
-    c.insert_company('SQM',   'SQM SA',                'Materials')
+DEPENDS_ON_EDGES: tuple[DependsOnEdge, ...] = (
+    ("AAPL", "TSMC", 0.95), ("AAPL", "QCOM", 0.60), ("AAPL", "AVGO", 0.55), ("AAPL", "MU", 0.45),
+    ("NVDA", "TSMC", 0.98), ("NVDA", "ASML", 0.70), ("NVDA", "MU", 0.50), ("NVDA", "LRCX", 0.40),
+    ("AMD", "TSMC", 0.95), ("AMD", "MU", 0.45), ("AMD", "ASML", 0.60),
+    ("INTC", "ASML", 0.90), ("INTC", "LRCX", 0.55), ("INTC", "KLAC", 0.50), ("INTC", "AMAT", 0.55),
+    ("TSMC", "ASML", 0.95), ("TSMC", "AMAT", 0.70), ("TSMC", "LRCX", 0.65), ("TSMC", "KLAC", 0.60),
+    ("QCOM", "TSMC", 0.90), ("QCOM", "ASML", 0.55),
+    ("TSLA", "TSMC", 0.50), ("TSLA", "NVDA", 0.35), ("TSLA", "FCX", 0.60), ("TSLA", "AMZN", 0.20),
+    ("AMZN", "NVDA", 0.65), ("AMZN", "TSMC", 0.45), ("AMZN", "QCOM", 0.30),
+    ("MSFT", "NVDA", 0.70), ("MSFT", "AMD", 0.40), ("MSFT", "TSMC", 0.40), ("MSFT", "AMZN", 0.15),
+    ("META", "NVDA", 0.80), ("META", "TSMC", 0.45), ("META", "AMD", 0.35),
+    ("GOOGL", "TSMC", 0.55), ("GOOGL", "NVDA", 0.60), ("GOOGL", "ASML", 0.40),
+    ("BA", "GE", 0.80), ("BA", "HON", 0.65), ("BA", "RTX", 0.70), ("BA", "DE", 0.20), ("BA", "CAT", 0.25),
+    ("LMT", "RTX", 0.55), ("LMT", "HON", 0.50), ("LMT", "GE", 0.45),
+    ("XOM", "SLB", 0.70), ("CVX", "SLB", 0.65), ("COP", "SLB", 0.60),
+    ("PFE", "TMO", 0.60), ("ABBV", "TMO", 0.50), ("MRK", "TMO", 0.55), ("LLY", "TMO", 0.65), ("LLY", "DHR", 0.55),
+    ("WMT", "AMZN", 0.10), ("TGT", "AMZN", 0.08), ("NKE", "TSMC", 0.05), ("MCD", "DE", 0.10),
+    ("JPM", "MSFT", 0.45), ("GS", "MSFT", 0.40), ("MS", "MSFT", 0.40), ("BLK", "MSFT", 0.35), ("V", "MSFT", 0.30), ("MA", "MSFT", 0.30),
+)
 
-    # --- Energy producers ---
-    c.insert_company('XOM',  'ExxonMobil Corp.',    'Energy')
-    c.insert_company('CVX',  'Chevron Corp.',       'Energy')
-    c.insert_company('SHEL', 'Shell PLC',           'Energy')
-    c.insert_company('BP',   'BP PLC',              'Energy')
-    c.insert_company('HAL',  'Halliburton Co.',     'Energy')
-    c.insert_company('SLB',  'SLB (Schlumberger)',  'Energy')
+REQUIRES_EDGES: tuple[RequiresEdge, ...] = (
+    ("TSMC", "SILICON", 5000), ("TSMC", "NEON_GAS", 200), ("TSMC", "SEMICONDUCTOR_WAFER", 8000),
+    ("NVDA", "SEMICONDUCTOR_CHIPS", 3000), ("AMD", "SEMICONDUCTOR_CHIPS", 1500),
+    ("INTC", "SILICON", 2000), ("INTC", "NEON_GAS", 100), ("AMAT", "SILICON", 500), ("ASML", "RARE_EARTH", 50),
+    ("TSLA", "LITHIUM", 2000), ("TSLA", "COBALT", 300), ("TSLA", "COPPER", 5000), ("TSLA", "ALUMINUM", 8000), ("TSLA", "RARE_EARTH", 200), ("TSLA", "CRUDE_OIL", 0),
+    ("CAT", "STEEL", 50000), ("CAT", "COPPER", 2000), ("BA", "ALUMINUM", 30000), ("BA", "STEEL", 10000), ("DE", "STEEL", 20000),
+    ("GE", "RARE_EARTH", 100), ("GE", "ALUMINUM", 5000), ("RTX", "RARE_EARTH", 80), ("RTX", "ALUMINUM", 4000),
+    ("LMT", "ALUMINUM", 6000), ("LMT", "RARE_EARTH", 120), ("FCX", "COAL", 1000),
+    ("XOM", "CRUDE_OIL", 500000), ("CVX", "CRUDE_OIL", 300000), ("COP", "NATURAL_GAS", 200000), ("SLB", "STEEL", 5000),
+    ("MCD", "CORN", 10000), ("MCD", "WHEAT", 5000), ("MCD", "PALM_OIL", 2000),
+    ("SBUX", "COFFEE", 5000), ("SBUX", "SUGAR", 1000), ("KO", "CORN", 20000), ("KO", "SUGAR", 15000),
+    ("PEP", "CORN", 25000), ("PEP", "SUGAR", 12000), ("WMT", "SHIPPING_CONTAINERS", 100000),
+    ("AMZN", "SHIPPING_CONTAINERS", 80000), ("COST", "SHIPPING_CONTAINERS", 40000), ("NKE", "SHIPPING_CONTAINERS", 15000),
+    ("PG", "PALM_OIL", 8000), ("PG", "ALUMINUM", 2000),
+    ("PFE", "NATURAL_GAS", 500), ("ABBV", "NATURAL_GAS", 300), ("LLY", "NATURAL_GAS", 400),
+    ("MSFT", "NATURAL_GAS", 5000), ("AMZN", "NATURAL_GAS", 8000), ("GOOGL", "NATURAL_GAS", 4000),
+    ("JPM", "CRUDE_OIL", 0),
+)
 
-    # --- Oil consumers: Airlines (heavy jet-fuel dependency) ---
-    c.insert_company('DAL', 'Delta Air Lines',        'Airlines')
-    c.insert_company('UAL', 'United Airlines',        'Airlines')
-    c.insert_company('LUV', 'Southwest Airlines',     'Airlines')
-    c.insert_company('AAL', 'American Airlines',      'Airlines')
+HISTORICAL_EVENTS: tuple[HistoricalEvent, ...] = (
+    ("EVT_TAIWAN_STRAIT_2024", "Taiwan Strait military tension escalation", "critical", ("TSMC", "AAPL", "NVDA", "AMD", "QCOM", "ASML")),
+    ("EVT_OPEC_CUT_2024", "OPEC+ production cut announcement", "high", ("CRUDE_OIL", "XOM", "CVX", "COP", "TSLA", "NKE")),
+    ("EVT_SUEZ_BLOCKAGE_2024", "Red Sea shipping disruption", "high", ("SHIPPING_CONTAINERS", "AMZN", "WMT", "NKE", "COST")),
+    ("EVT_RARE_EARTH_CHINA_2024", "China rare earth export restrictions", "critical", ("RARE_EARTH", "TSLA", "GE", "RTX", "LMT", "NVDA")),
+    ("EVT_LITHIUM_SURPLUS_2024", "Lithium price crash - oversupply", "medium", ("LITHIUM", "TSLA", "MU")),
+    ("EVT_AI_CHIP_EXPORT_BAN", "US AI chip export controls tightened", "high", ("NVDA", "AMD", "AMAT", "LRCX", "KLAC")),
+    ("EVT_NEON_UKRAINE_2022", "Ukraine conflict disrupts neon gas supply", "high", ("NEON_GAS", "TSMC", "INTC", "ASML")),
+    ("EVT_NATURAL_GAS_EU_2022", "European natural gas supply crisis", "high", ("NATURAL_GAS", "MSFT", "AMZN", "PFE")),
+)
 
-    # --- Oil consumers: Shipping & Logistics ---
-    c.insert_company('FDX', 'FedEx Corporation',  'Logistics')
-    c.insert_company('UPS', 'United Parcel Service', 'Logistics')
-    c.insert_company('MAERSK', 'A.P. Moller-Maersk', 'Shipping')
+SEVERITY_SCORE = {"medium": 5, "high": 8, "critical": 10}
 
-    # --- Oil consumers: Petrochemicals / Plastics ---
-    c.insert_company('DOW',  'Dow Inc.',               'Materials')
-    c.insert_company('LYB',  'LyondellBasell Industries', 'Materials')
-    c.insert_company('DD',   'DuPont de Nemours',      'Materials')
 
-    # --- Oil consumers: Heavy industry / Aerospace ---
-    c.insert_company('BA',   'Boeing Company',        'Aerospace')
-    c.insert_company('CAT',  'Caterpillar Inc.',      'Industrials')
-    c.insert_company('DE',   'Deere & Company',       'Industrials')
+def _count_unique_pairs(edges: Iterable[tuple[str, str, object]]) -> int:
+    return len({(src, dst) for src, dst, _ in edges})
 
-    print("Companies inserted")
 
-    # -----------------------------------------------------------------------
-    # 2. Commodity vertices
-    # -----------------------------------------------------------------------
-    c.insert_commodity('SEMICONDUCTOR', 'Semiconductors',      'Electronic Components')
-    c.insert_commodity('LITHIUM',       'Lithium',             'Battery Metals')
-    c.insert_commodity('COBALT',        'Cobalt',              'Battery Metals')
-    c.insert_commodity('CRUDE_OIL',     'Crude Oil',           'Energy')
-    c.insert_commodity('NATURAL_GAS',   'Natural Gas',         'Energy')
-    c.insert_commodity('RARE_EARTH',    'Rare Earth Elements', 'Strategic Minerals')
-    c.insert_commodity('JET_FUEL',      'Jet Fuel',            'Energy')
+def print_dry_run() -> None:
+    """Print seed counts without writing to NebulaGraph."""
+    impact_edges = sum(len(event[3]) for event in HISTORICAL_EVENTS)
+    print("DRY RUN - no graph writes")
+    print(f"Company count: {len(COMPANIES)}")
+    print(f"Commodity count: {len(COMMODITIES)}")
+    print(f"DEPENDS_ON edge count: {_count_unique_pairs(DEPENDS_ON_EDGES)}")
+    print(f"REQUIRES edge count: {_count_unique_pairs(REQUIRES_EDGES)}")
+    print(f"Event count: {len(HISTORICAL_EVENTS)}")
+    print(f"IMPACTS edge count: {impact_edges}")
 
-    print("Commodities inserted")
 
-    # -----------------------------------------------------------------------
-    # 3. DEPENDS_ON edges
-    #
-    # Edge direction: (consumer) -[:DEPENDS_ON]-> (supplier)
-    # trace_impact("X") returns every consumer that transitively depends on X
-    # -----------------------------------------------------------------------
+def create_companies(client: SecureGraphClient) -> None:
+    for ticker, name, sector in COMPANIES:
+        client.insert_company(ticker, name, sector)
+    print(f"Companies upserted: {len(COMPANIES)}")
 
-    # --- Big Tech depends on TSMC for chip fabrication ---
-    for src, weight in [
-        ('AAPL', 0.92),
-        ('NVDA', 0.95),
-        ('AMD',  0.90),
-        ('QCOM', 0.88),
-        ('INTC', 0.40),
-        ('MSFT', 0.60),
-        ('GOOG', 0.65),
-        ('META', 0.55),
-        ('TSLA', 0.45),
-        ('AMZN', 0.50),
-    ]:
-        c.insert_depends_on(src, 'TSMC', weight)
 
-    # TSMC depends on ASML for EUV lithography
-    c.insert_depends_on('TSMC', 'ASML', 0.97)
+def create_commodities(client: SecureGraphClient) -> None:
+    for commodity_id, name, category in COMMODITIES:
+        client.insert_commodity(commodity_id, name, category)
+    print(f"Commodities upserted: {len(COMMODITIES)}")
 
-    # --- EV makers depend on battery cell suppliers ---
-    c.insert_depends_on('TSLA', 'PCRHY', 0.70)
-    c.insert_depends_on('F',    'PCRHY', 0.45)
-    c.insert_depends_on('GM',   'PCRHY', 0.30)
 
-    # Battery suppliers depend on lithium miners
-    c.insert_depends_on('PCRHY', 'ALB', 0.55)
-    c.insert_depends_on('PCRHY', 'SQM', 0.45)
-    c.insert_depends_on('TSLA',  'ALB', 0.40)
-    c.insert_depends_on('TSLA',  'SQM', 0.35)
-    c.insert_depends_on('F',     'ALB', 0.25)
-    c.insert_depends_on('GM',    'ALB', 0.25)
+def create_depends_on_edges(client: SecureGraphClient) -> None:
+    for src, dst, weight in DEPENDS_ON_EDGES:
+        client.insert_depends_on(src, dst, weight)
+    print(f"DEPENDS_ON edges inserted: {_count_unique_pairs(DEPENDS_ON_EDGES)}")
 
-    # --- Oil majors depend on oilfield services companies ---
-    c.insert_depends_on('XOM',  'HAL', 0.50)
-    c.insert_depends_on('XOM',  'SLB', 0.55)
-    c.insert_depends_on('CVX',  'HAL', 0.45)
-    c.insert_depends_on('CVX',  'SLB', 0.50)
-    c.insert_depends_on('SHEL', 'SLB', 0.60)
-    c.insert_depends_on('BP',   'SLB', 0.55)
-    c.insert_depends_on('BP',   'HAL', 0.40)
 
-    # --- Airlines depend on oil majors for jet fuel supply ---
-    # This is the key missing set: makes oil-war disruptions cascade to airlines
-    for airline, weight in [
-        ('DAL', 0.85),
-        ('UAL', 0.82),
-        ('LUV', 0.88),
-        ('AAL', 0.84),
-    ]:
-        c.insert_depends_on(airline, 'XOM',  weight * 0.40)
-        c.insert_depends_on(airline, 'CVX',  weight * 0.35)
-        c.insert_depends_on(airline, 'SHEL', weight * 0.15)
-        c.insert_depends_on(airline, 'BP',   weight * 0.10)
+def create_requires_edges(client: SecureGraphClient) -> None:
+    for src, dst, volume in REQUIRES_EDGES:
+        client.insert_requires(src, dst, volume)
+    print(f"REQUIRES edges inserted: {_count_unique_pairs(REQUIRES_EDGES)}")
 
-    # --- Logistics depends on oil majors for diesel/bunker fuel ---
-    c.insert_depends_on('FDX',   'XOM',  0.45)
-    c.insert_depends_on('FDX',   'CVX',  0.35)
-    c.insert_depends_on('UPS',   'XOM',  0.40)
-    c.insert_depends_on('UPS',   'CVX',  0.35)
-    c.insert_depends_on('MAERSK', 'XOM',  0.50)
-    c.insert_depends_on('MAERSK', 'SHEL', 0.50)
 
-    # --- Petrochemicals depend on oil majors for feedstock ---
-    c.insert_depends_on('DOW',  'XOM',  0.55)
-    c.insert_depends_on('DOW',  'SHEL', 0.30)
-    c.insert_depends_on('LYB',  'XOM',  0.60)
-    c.insert_depends_on('LYB',  'CVX',  0.40)
-    c.insert_depends_on('DD',   'XOM',  0.35)
-    c.insert_depends_on('DD',   'CVX',  0.30)
+def create_historical_events(client: SecureGraphClient) -> None:
+    impact_count = 0
+    for event_id, description, severity, impacted_entities in HISTORICAL_EVENTS:
+        client.upsert_event(event_id, description, SEVERITY_SCORE[severity])
+        for target_vid in impacted_entities:
+            client.insert_impacts(event_id, target_vid)
+            impact_count += 1
+    print(f"Events upserted: {len(HISTORICAL_EVENTS)}")
+    print(f"IMPACTS edges inserted: {impact_count}")
 
-    # --- Aerospace / heavy industry depend on oil for production energy ---
-    c.insert_depends_on('BA',  'XOM', 0.30)
-    c.insert_depends_on('BA',  'CVX', 0.25)
-    c.insert_depends_on('CAT', 'XOM', 0.35)
-    c.insert_depends_on('DE',  'XOM', 0.30)
 
-    # --- Airlines also depend on Boeing for aircraft ---
-    c.insert_depends_on('DAL', 'BA', 0.60)
-    c.insert_depends_on('UAL', 'BA', 0.55)
-    c.insert_depends_on('AAL', 'BA', 0.65)
-    c.insert_depends_on('LUV', 'BA', 0.95)  # Southwest is nearly all-Boeing fleet
+def verify_seeding(client: SecureGraphClient) -> None:
+    checks = (
+        ("TSMC", 3, {"AAPL", "NVDA", "AMD", "QCOM", "MSFT", "META", "GOOGL"}),
+        ("NVDA", 3, {"MSFT", "META", "GOOGL", "AMZN", "TSLA"}),
+        ("CRUDE_OIL", 2, {"XOM", "CVX", "COP", "TSLA"}),
+        ("RARE_EARTH", 2, {"TSLA", "GE", "RTX", "LMT", "NVDA"}),
+    )
+    print("\nSupply-chain trace verification")
+    for target_vid, hops, expected in checks:
+        impacted = client.trace_impact(target_vid, hops)
+        found = {company["ticker"] for company in impacted}
+        missing = sorted(expected - found)
+        print(f"trace_impact({target_vid!r}, hops={hops}) -> {len(found)} companies")
+        if missing:
+            raise RuntimeError(f"{target_vid} trace missing expected tickers: {', '.join(missing)}")
 
-    print("DEPENDS_ON edges inserted")
 
-    # -----------------------------------------------------------------------
-    # 4. REQUIRES edges (company -> commodity they consume)
-    # -----------------------------------------------------------------------
-    c.insert_requires('TSMC',  'SEMICONDUCTOR', 1000)
-    c.insert_requires('AAPL',  'RARE_EARTH',     500)
-    c.insert_requires('TSLA',  'LITHIUM',        800)
-    c.insert_requires('TSLA',  'COBALT',         400)
-    c.insert_requires('PCRHY', 'LITHIUM',        600)
-    c.insert_requires('PCRHY', 'COBALT',         300)
-    c.insert_requires('F',     'LITHIUM',        300)
-    c.insert_requires('GM',    'LITHIUM',        350)
-    c.insert_requires('XOM',   'CRUDE_OIL',     9000)
-    c.insert_requires('CVX',   'CRUDE_OIL',     7000)
-    c.insert_requires('SHEL',  'CRUDE_OIL',     8000)
-    c.insert_requires('SHEL',  'NATURAL_GAS',   5000)
-    c.insert_requires('BP',    'CRUDE_OIL',     6000)
-    c.insert_requires('BP',    'NATURAL_GAS',   4000)
-    c.insert_requires('DAL',   'JET_FUEL',      9500)
-    c.insert_requires('UAL',   'JET_FUEL',      8800)
-    c.insert_requires('LUV',   'JET_FUEL',      7200)
-    c.insert_requires('AAL',   'JET_FUEL',      9200)
-    c.insert_requires('DOW',   'CRUDE_OIL',     6000)
-    c.insert_requires('LYB',   'CRUDE_OIL',     5000)
-    c.insert_requires('BA',    'RARE_EARTH',     800)
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Seed QuantVex production graph data.")
+    parser.add_argument("--dry-run", action="store_true", help="Print counts without writing to the graph.")
+    args = parser.parse_args()
 
-    print("REQUIRES edges inserted")
+    if args.dry_run:
+        print_dry_run()
+        return
 
-    # -----------------------------------------------------------------------
-    # 5. Verification — trace all key supply chain anchors
-    # -----------------------------------------------------------------------
-    print('\n' + '='*60)
-    print('SUPPLY CHAIN VERIFICATION')
-    print('='*60)
+    with SecureGraphClient() as client:
+        create_companies(client)
+        create_commodities(client)
+        create_depends_on_edges(client)
+        create_requires_edges(client)
+        create_historical_events(client)
+        verify_seeding(client)
 
-    test_cases = [
-        ('TSMC',  2, 'Taiwan chip shock'),
-        ('ASML',  3, 'Lithography equipment ban'),
-        ('XOM',   2, 'ExxonMobil oil disruption'),
-        ('CVX',   2, 'Chevron oil disruption'),
-        ('ALB',   2, 'Lithium shortage'),
-        ('SLB',   2, 'Oilfield services disruption'),
-        ('BA',    2, 'Boeing production halt'),
-    ]
+    print("\nSEED COMPLETE")
 
-    for ticker, hops, scenario in test_cases:
-        impacts = c.trace_impact(ticker, hops)
-        print(f'\ntrace_impact("{ticker}", {hops} hops) [{scenario}]')
-        print(f'  => {len(impacts)} companies downstream:')
-        for co in impacts:
-            print(f'     {co["ticker"]:8s}  {co["name"]}  [{co["sector"]}]')
 
-print('\nSEED COMPLETE')
+if __name__ == "__main__":
+    main()

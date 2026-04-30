@@ -141,6 +141,12 @@ async def run_news_ingestion_pipeline(
     logger.info("pipeline: fetched %d articles", result.articles_fetched)
 
     if not articles:
+        logger.info("pipeline: no articles from NewsAPI, trying RSS fallback")
+        articles = await news_client.fetch_articles_fallback(query)
+        result.articles_fetched = len(articles)
+        logger.info("pipeline: RSS fallback returned %d articles", result.articles_fetched)
+
+    if not articles:
         logger.info("pipeline: no articles returned, exiting early")
         return result
 

@@ -1,23 +1,25 @@
 """
-Integration tests for SecureGraphClient write API:
+Tests for SecureGraphClient write API:
   insert_company / insert_commodity / upsert_event
 
-Prerequisites
--------------
+Prerequisites for integration tests
+-------------------------------------
 - NebulaGraph 4-container stack running (docker-compose up -d)
 - supply_chain space bootstrapped (python -m finance_mcp.graph.schema)
 
-Run
----
+Unit tests (TestInsertValidation) run without any live graph.
+Integration tests are auto-skipped when NebulaGraph is not reachable.
+
+Run unit tests only (no docker required)::
+
     cd /Users/anuragraut/Desktop/EDAI_MCP/finance-mcp
-    PYTHONPATH=src .venv/bin/python3.11 -m pytest tests/test_insert.py -v
+    PYTHONPATH=src .venv/bin/python3.11 -m pytest tests/test_insert.py -v -m "not integration"
 """
 
 from __future__ import annotations
 
 import pytest
-from nebula3.gclient.net import ConnectionPool
-from nebula3.Config import Config
+from unittest.mock import MagicMock
 
 from finance_mcp.graph.client import SecureGraphClient
 
@@ -25,12 +27,16 @@ from finance_mcp.graph.client import SecureGraphClient
 # Fixtures
 # ---------------------------------------------------------------------------
 
-_COMPANY_VID  = "AAPL"
+_COMPANY_VID   = "AAPL"
 _COMMODITY_VID = "LITHIUM"
-_EVENT_VID    = "EVT_INSERT_001"
+_EVENT_VID     = "EVT_INSERT_001"
+
 
 def _root_execute(nGQL: str) -> None:
     """One-shot execution using the root session (teardown helper)."""
+    from nebula3.gclient.net import ConnectionPool
+    from nebula3.Config import Config
+
     cfg = Config()
     cfg.max_connection_pool_size = 1
     pool = ConnectionPool()
@@ -47,17 +53,33 @@ def _root_execute(nGQL: str) -> None:
 
 
 @pytest.fixture(scope="module")
+def mock_client():
+    """
+    A SecureGraphClient with a fake pool injected so that validation methods
+    (which raise ValueError before touching the graph) work without any live
+    NebulaGraph connection.  Used exclusively by TestInsertValidation.
+    """
+    c = SecureGraphClient(host="127.0.0.1", port=9669)
+    fake_pool = MagicMock()
+    fake_session = MagicMock()
+    fake_session.execute.return_value = MagicMock(is_succeeded=lambda: True)
+    fake_pool.get_session.return_value = fake_session
+    c._pool = fake_pool
+    return c
+
+
+@pytest.fixture(scope="module")
 def client():
-    """Single SecureGraphClient for the whole module, pool initialised."""
+    """Live SecureGraphClient — requires running NebulaGraph."""
     with SecureGraphClient(host="127.0.0.1", port=9669) as c:
         yield c
 
 
-@pytest.fixture(autouse=True, scope="module")
+@pytest.fixture(scope="module")
 def cleanup(client: SecureGraphClient):
     """Delete test vertices before and after the module runs."""
     vids = [_COMPANY_VID, _COMMODITY_VID, _EVENT_VID]
-    fmted = ", ".join(f'"{v}"' for v in vids)
+    fmted = ", ".join(f'"{ v}"' for v in vids)
 
     def _delete() -> None:
         try:
@@ -75,61 +97,65 @@ def cleanup(client: SecureGraphClient):
 # ---------------------------------------------------------------------------
 
 class TestInsertValidation:
+    """
+    Input-validation tests — all raise ValueError before touching NebulaGraph.
+    Uses mock_client so they run without a live graph.
+    """
 
     # --- insert_company ---
 
-    def test_insert_company_empty_ticker_raises(self, client: SecureGraphClient):
+    def test_insert_company_empty_ticker_raises(self, mock_client: SecureGraphClient):
         with pytest.raises(ValueError, match="ticker"):
-            client.insert_company("", "Some Corp")
+            mock_client.insert_company("", "Some Corp")
 
-    def test_insert_company_bad_ticker_chars_raises(self, client: SecureGraphClient):
+    def test_insert_company_bad_ticker_chars_raises(self, mock_client: SecureGraphClient):
         with pytest.raises(ValueError, match="ticker"):
-            client.insert_company("BAD TICKER!", "Some Corp")
+            mock_client.insert_company("BAD TICKER!", "Some Corp")
 
-    def test_insert_company_ticker_too_long_raises(self, client: SecureGraphClient):
+    def test_insert_company_ticker_too_long_raises(self, mock_client: SecureGraphClient):
         too_long = "A" * 65
         with pytest.raises(ValueError, match="ticker"):
-            client.insert_company(too_long, "Some Corp")
+            mock_client.insert_company(too_long, "Some Corp")
 
-    def test_insert_company_empty_name_raises(self, client: SecureGraphClient):
+    def test_insert_company_empty_name_raises(self, mock_client: SecureGraphClient):
         with pytest.raises(ValueError, match="name"):
-            client.insert_company("VALID", "")
+            mock_client.insert_company("VALID", "")
 
-    def test_insert_company_name_too_long_raises(self, client: SecureGraphClient):
+    def test_insert_company_name_too_long_raises(self, mock_client: SecureGraphClient):
         with pytest.raises(ValueError, match="name"):
-            client.insert_company("VALID", "X" * 257)
+            mock_client.insert_company("VALID", "X" * 257)
 
     # --- insert_commodity ---
 
-    def test_insert_commodity_bad_id_raises(self, client: SecureGraphClient):
+    def test_insert_commodity_bad_id_raises(self, mock_client: SecureGraphClient):
         with pytest.raises(ValueError, match="commodity_id"):
-            client.insert_commodity("bad id!", "Lithium")
+            mock_client.insert_commodity("bad id!", "Lithium")
 
-    def test_insert_commodity_empty_name_raises(self, client: SecureGraphClient):
+    def test_insert_commodity_empty_name_raises(self, mock_client: SecureGraphClient):
         with pytest.raises(ValueError, match="name"):
-            client.insert_commodity("LITHIUM", "")
+            mock_client.insert_commodity("LITHIUM", "")
 
     # --- upsert_event ---
 
-    def test_upsert_event_bad_event_id_raises(self, client: SecureGraphClient):
+    def test_upsert_event_bad_event_id_raises(self, mock_client: SecureGraphClient):
         with pytest.raises(ValueError, match="event_id"):
-            client.upsert_event("bad id!", "desc", 5)
+            mock_client.upsert_event("bad id!", "desc", 5)
 
-    def test_upsert_event_empty_description_raises(self, client: SecureGraphClient):
+    def test_upsert_event_empty_description_raises(self, mock_client: SecureGraphClient):
         with pytest.raises(ValueError, match="description"):
-            client.upsert_event("EVT_OK", "", 5)
+            mock_client.upsert_event("EVT_OK", "", 5)
 
-    def test_upsert_event_severity_too_high_raises(self, client: SecureGraphClient):
+    def test_upsert_event_severity_too_high_raises(self, mock_client: SecureGraphClient):
         with pytest.raises(ValueError, match="severity"):
-            client.upsert_event("EVT_OK", "desc", 11)
+            mock_client.upsert_event("EVT_OK", "desc", 11)
 
-    def test_upsert_event_severity_negative_raises(self, client: SecureGraphClient):
+    def test_upsert_event_severity_negative_raises(self, mock_client: SecureGraphClient):
         with pytest.raises(ValueError, match="severity"):
-            client.upsert_event("EVT_OK", "desc", -1)
+            mock_client.upsert_event("EVT_OK", "desc", -1)
 
-    def test_upsert_event_severity_non_int_raises(self, client: SecureGraphClient):
+    def test_upsert_event_severity_non_int_raises(self, mock_client: SecureGraphClient):
         with pytest.raises(ValueError, match="severity"):
-            client.upsert_event("EVT_OK", "desc", 5.0)  # type: ignore[arg-type]
+            mock_client.upsert_event("EVT_OK", "desc", 5.0)  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +163,7 @@ class TestInsertValidation:
 # ---------------------------------------------------------------------------
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("cleanup")
 class TestInsertCompany:
 
     def test_insert_apple_returns_true(self, client: SecureGraphClient):
@@ -173,6 +200,7 @@ class TestInsertCompany:
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("cleanup")
 class TestInsertCommodity:
 
     def test_insert_lithium_returns_true(self, client: SecureGraphClient):
@@ -200,6 +228,7 @@ class TestInsertCommodity:
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("cleanup")
 class TestUpsertEvent:
 
     def test_upsert_creates_event(self, client: SecureGraphClient):

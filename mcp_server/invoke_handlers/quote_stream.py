@@ -72,6 +72,14 @@ async def handle_quote_stream(
             symbol=symbol,
             channel=channel
         )
+        data = response.model_dump()
+        data.update(
+            {
+                "success": True,
+                "channel": f"{ws_channel}.{symbol}",
+                "message": "Subscribed successfully",
+            }
+        )
         
         logger.info(
             "quote_stream_subscribed",
@@ -81,7 +89,7 @@ async def handle_quote_stream(
         
         return ToolResponse(
             success=True,
-            data=response.model_dump(),
+            data=data,
             cache_hit=False,
             data_source="binance"
         )
@@ -137,8 +145,11 @@ async def handle_unsubscribe(subscription_id: str) -> ToolResponse:
             return ToolResponse(
                 success=True,
                 data={
+                    "success": True,
                     "subscription_id": subscription_id,
-                    "status": "unsubscribed"
+                    "channel": f"{sub_info.get('channel', 'trades')}.{sub_info.get('symbol', '')}",
+                    "message": "Unsubscribed successfully",
+                    "status": "unsubscribed",
                 }
             )
         else:

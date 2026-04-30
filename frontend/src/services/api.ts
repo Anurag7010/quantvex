@@ -1,23 +1,41 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-const API_KEY = process.env.REACT_APP_API_KEY || 'dev_key_change_in_production';
+const API_BASE_URL =
+  process.env.VITE_API_BASE_URL ||
+  process.env.REACT_APP_API_URL ||
+  'http://localhost:8000';
+const API_KEY = process.env.VITE_API_KEY || process.env.REACT_APP_API_KEY || '';
 
-// Configure axios to include API key in all requests
-axios.defaults.headers.common['X-API-Key'] = API_KEY;
+if (!API_KEY) {
+  console.error('VITE_API_KEY is not set. API calls will fail.');
+}
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'X-API-Key': API_KEY,
+    'Content-Type': 'application/json',
+  },
+});
 
 export interface QuoteData {
   symbol: string;
   price: number;
+  inr_price?: number;
+  usd_inr_rate?: number;
   timestamp: string;
   data_source: string;
   cache_hit: boolean;
   latency_ms: number;
   volume?: number;
   high?: number;
+  inr_high?: number;
   low?: number;
+  inr_low?: number;
   open?: number;
+  inr_open?: number;
   previous_close?: number;
+  inr_previous_close?: number;
 }
 
 export interface QuoteResponse {
@@ -38,8 +56,8 @@ export interface Capabilities {
   tools: Array<{
     name: string;
     description: string;
-    inputSchema: any;
-    outputSchema: any;
+    inputSchema: Record<string, unknown>;
+    outputSchema: Record<string, unknown>;
   }>;
   connectors: Array<{
     name: string;
@@ -61,25 +79,58 @@ export interface ChatResponse {
   error: string | null;
 }
 
+export interface MultiAgentAnalysisData {
+  query: string;
+  ticker?: string | null;
+  final_verdict?: string;
+  verdict?: string;
+  conviction?: string;
+  confidence?: number;
+  composite_confidence?: number;
+  summary?: string;
+  key_drivers?: {
+    bull_drivers?: string[];
+    bear_drivers?: string[];
+    dominant_side?: string;
+  };
+}
+
+export interface MultiAgentAnalysisResponse {
+  success: boolean;
+  data: MultiAgentAnalysisData | null;
+  error: string | null;
+}
+
+export interface SubscriptionResponse {
+  success?: boolean;
+  subscription_id?: string;
+  status?: string;
+  symbol?: string;
+  channel?: string;
+  message?: string;
+  error?: string;
+}
+
 class MCPApi {
   private baseUrl: string;
 
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl;
+    api.defaults.baseURL = this.baseUrl;
   }
 
   async getHealth(): Promise<HealthStatus> {
-    const response = await axios.get<HealthStatus>(`${this.baseUrl}/health`);
+    const response = await api.get<HealthStatus>('/health');
     return response.data;
   }
 
   async getCapabilities(): Promise<Capabilities> {
-    const response = await axios.get<Capabilities>(`${this.baseUrl}/capabilities`);
+    const response = await api.get<Capabilities>('/capabilities');
     return response.data;
   }
 
   async getQuote(symbol: string, maxAgeSec: number = 60): Promise<QuoteResponse> {
-    const response = await axios.post<QuoteResponse>(`${this.baseUrl}/invoke`, {
+    const response = await api.post<QuoteResponse>('/invoke', {
       tool_name: 'quote.latest',
       arguments: {
         symbol: symbol.toUpperCase(),
@@ -91,8 +142,11 @@ class MCPApi {
     return response.data;
   }
 
-  async subscribeStream(symbol: string, channel: 'trades' | 'quotes' = 'trades') {
-    const response = await axios.post(`${this.baseUrl}/subscribe`, {
+  async subscribeStream(
+    symbol: string,
+    channel: 'trades' | 'quotes' = 'trades',
+  ): Promise<SubscriptionResponse> {
+    const response = await api.post<SubscriptionResponse>('/subscribe', {
       symbol: symbol.toUpperCase(),
       channel,
       agent_id: 'react_frontend',
@@ -100,17 +154,58 @@ class MCPApi {
     return response.data;
   }
 
-  async unsubscribe(subscriptionId: string) {
-    const response = await axios.post(`${this.baseUrl}/unsubscribe`, {
+  async unsubscribe(subscriptionId: string): Promise<SubscriptionResponse> {
+    const response = await api.post<SubscriptionResponse>('/unsubscribe', {
       subscription_id: subscriptionId,
     });
     return response.data;
   }
 
   async chat(message: string): Promise<ChatResponse> {
-    const response = await axios.post<ChatResponse>(`${this.baseUrl}/chat`, {
+    const response = await api.post<ChatResponse>('/chat', {
       message,
     });
+    return response.data;
+  }
+
+  async runMultiAgentAnalysis(
+    query: string,
+    ticker?: string,
+  ): Promise<MultiAgentAnalysisResponse> {
+    const response = await api.post<MultiAgentAnalysisResponse>('/invoke', {
+      tool_name: 'multi_agent_analysis',
+      arguments: {
+        query,
+        ticker,
+      },
+      agent_id: 'react_frontend',
+      query_text: query,
+    });
+    return response.data;
+  }
+
+  async getMarketIndices(): Promise<{
+    nifty?: { price: number; change_pct: number };
+    sensex?: { price: number; change_pct: number };
+    usd_inr?: number;
+    timestamp?: string;
+  }> {
+    const response = await api.get('/market/indices');
+    return response.data;
+  }
+
+  async getCryptoQuote(symbol: string): Promise<{
+    symbol: string;
+    price_usd: number;
+    inr_price: number;
+    change_pct: number;
+    volume: number;
+    high_24h: number;
+    low_24h: number;
+    source: string;
+    timestamp: string;
+  }> {
+    const response = await api.get(`/market/crypto/${symbol}`);
     return response.data;
   }
 }

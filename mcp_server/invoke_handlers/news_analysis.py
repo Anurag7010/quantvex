@@ -127,11 +127,59 @@ async def handle_news_analysis(
             nebula_host=settings.nebula_host,
             nebula_port=settings.nebula_port,
         )
-    except Exception as exc:
-        # str(exc) is empty for some httpx / network exception types —
-        # fall back to repr() so the log always contains something useful.
+    except RuntimeError as exc:
+        # Surface real errors (bad API key, rate limit, etc.) with agent_note
         pipeline_error = str(exc).strip() or repr(exc) or type(exc).__name__
         logger.error("news_analysis_pipeline_error", error=pipeline_error)
+        if not ticker:
+            return ToolResponse(
+                success=True,
+                data={
+                    "query": query,
+                    "articles_found": 0,
+                    "articles_fetched": 0,
+                    "events_found": 0,
+                    "events_ingested": 0,
+                    "direct_entities": [],
+                    "directly_affected": [],
+                    "cascade": [],
+                    "downstream_cascade": {},
+                    "total_cascade_companies": 0,
+                    "news_events": [],
+                    "error": pipeline_error,
+                    "pipeline_error": pipeline_error,
+                    "news_available": False,
+                    "agent_note": (
+                        f"News fetch failed: {pipeline_error}. "
+                        "Tell the user you attempted to fetch live news but encountered an error. "
+                        "Provide relevant context from your training data with a clear disclaimer "
+                        "that it may not reflect the latest developments."
+                    ),
+                },
+            )
+        # ticker anchor present — fall through so graph trace can still run
+    except Exception as exc:
+        pipeline_error = str(exc).strip() or repr(exc) or type(exc).__name__
+        logger.error("news_analysis_pipeline_error", error=pipeline_error)
+        if not ticker:
+            return ToolResponse(
+                success=True,
+                data={
+                    "query": query,
+                    "articles_found": 0,
+                    "articles_fetched": 0,
+                    "events_found": 0,
+                    "events_ingested": 0,
+                    "news_events": [],
+                    "directly_affected": [],
+                    "downstream_cascade": {},
+                    "total_cascade_companies": 0,
+                    "error": f"Unexpected error: {pipeline_error}",
+                    "pipeline_error": pipeline_error,
+                    "news_available": False,
+                    "agent_note": "Tool failed unexpectedly. Acknowledge this to the user.",
+                },
+            )
         # Do NOT return yet — ticker-anchor fallback may still yield graph data.
 
     # ------------------------------------------------------------------
@@ -162,13 +210,14 @@ async def handle_news_analysis(
     # Ticker anchor: when the caller knows which company or commodity is at
     # the centre of the disruption, always include it — even if the news NER
     # missed it or the pipeline failed entirely.
-    # Commodity VIDs (CRUDE_OIL, SEMICONDUCTOR, etc.) must go into
-    # commodity_entities so they are resolved via find_companies_requiring(),
-    # not via trace_impact() which only traverses Company→Company edges.
+    # Commodity VIDs go into commodity_entities and are traced directly;
+    # SecureGraphClient.trace_impact handles Commodity -> REQUIRES cascades.
     # ------------------------------------------------------------------
     _KNOWN_COMMODITY_VIDS = frozenset({
-        "CRUDE_OIL", "SEMICONDUCTOR", "NATURAL_GAS", "LITHIUM",
-        "RARE_EARTH", "COBALT", "JET_FUEL",
+        "CRUDE_OIL", "NATURAL_GAS", "COAL", "SEMICONDUCTOR_WAFER",
+        "LITHIUM", "COBALT", "COPPER", "RARE_EARTH", "ALUMINUM", "STEEL",
+        "CORN", "WHEAT", "SOYBEANS", "COFFEE", "SUGAR", "PALM_OIL",
+        "SHIPPING_CONTAINERS", "SEMICONDUCTOR_CHIPS", "SILICON", "NEON_GAS",
     })
     if ticker:
         ticker = ticker.strip().upper()
@@ -238,26 +287,14 @@ async def handle_news_analysis(
                             ticker, exc,
                         )
 
-                # Commodity entities → find direct consumers, then trace them
+                # Commodity entities -> trace commodity anchors directly.
                 for commodity_id, commodity_name in commodity_entities.items():
                     try:
-                        requiring = client.find_companies_requiring(commodity_id)
-                        for co in requiring:
-                            ticker = co["ticker"]
-                            # Add to directly affected if not already known
-                            if ticker not in company_entities:
-                                company_entities[ticker] = co["name"]
-                            # Trace cascade unless already done
-                            if ticker not in downstream_cascade:
-                                try:
-                                    impacted = client.trace_impact(ticker, max_hops)
-                                    if impacted:
-                                        downstream_cascade[ticker] = impacted
-                                except Exception as exc:
-                                    logger.warning(
-                                        "news_analysis_trace_error ticker=%s error=%s",
-                                        ticker, exc,
-                                    )
+                        impacted = client.trace_impact(commodity_id, max_hops)
+                        if impacted:
+                            downstream_cascade[commodity_id] = impacted
+                            for co in impacted:
+                                company_entities.setdefault(co["ticker"], co["name"])
                     except Exception as exc:
                         logger.warning(
                             "news_analysis_commodity_error commodity=%s error=%s",

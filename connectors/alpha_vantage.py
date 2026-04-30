@@ -3,6 +3,8 @@ Alpha Vantage REST Connector
 Free tier - rate limited to 5 calls/minute
 """
 import httpx
+import asyncio
+import inspect
 import time
 from typing import Optional
 from datetime import datetime
@@ -15,6 +17,13 @@ from connectors.exceptions import RateLimitError
 logger = get_logger(__name__)
 
 
+async def _response_json(response: httpx.Response) -> dict:
+    payload = response.json()
+    if inspect.isawaitable(payload):
+        payload = await payload
+    return payload
+
+
 class AlphaVantageConnector:
     """Alpha Vantage REST API connector. Free tier: 5 calls/min, 500/day."""
 
@@ -23,19 +32,19 @@ class AlphaVantageConnector:
     def __init__(self):
         settings = get_settings()
         self._api_key = settings.alpha_vantage_api_key
-        self._client = httpx.AsyncClient(timeout=30.0)
+        self._client = httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=3.0))
         self._last_call_time = 0
         self._min_interval = 12.0  # Enforce 5 calls/minute max
     
     async def close(self):
         await self._client.aclose()
 
-    def _respect_rate_limit(self):
+    async def _respect_rate_limit(self) -> None:
         elapsed = time.time() - self._last_call_time
         if elapsed < self._min_interval:
             sleep_time = self._min_interval - elapsed
             logger.debug("rate_limit_wait", seconds=sleep_time)
-            time.sleep(sleep_time)
+            await asyncio.sleep(sleep_time)
         self._last_call_time = time.time()
     
     @retry(
@@ -44,7 +53,7 @@ class AlphaVantageConnector:
         retry=retry_if_exception_type((httpx.HTTPError, RateLimitError))
     )
     async def get_quote(self, symbol: str) -> Optional[QuoteData]:
-        self._respect_rate_limit()
+        await self._respect_rate_limit()
         start_time = time.time()
         
         try:
@@ -59,7 +68,7 @@ class AlphaVantageConnector:
             response = await self._client.get(self.BASE_URL, params=params)
             response.raise_for_status()
             
-            data = response.json()
+            data = await _response_json(response)
             
             # Check for rate limit or error messages
             if "Note" in data:
@@ -119,7 +128,7 @@ class AlphaVantageConnector:
     )
     async def get_intraday(self, symbol: str, interval: str = "5min") -> Optional[dict]:
         """Fetch intraday time series (limited on free tier)."""
-        self._respect_rate_limit()
+        await self._respect_rate_limit()
         
         try:
             params = {
@@ -133,7 +142,7 @@ class AlphaVantageConnector:
             response = await self._client.get(self.BASE_URL, params=params)
             response.raise_for_status()
             
-            data = response.json()
+            data = await _response_json(response)
             
             if "Note" in data:
                 raise RateLimitError(data["Note"])

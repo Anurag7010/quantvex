@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { MoveRight } from "lucide-react";
+import { Menu, MoveRight, X } from "lucide-react";
 import { Button } from "./button";
 import { FocusRail, type FocusRailItem } from "./focus-rail";
+import { mcpApi } from "../../services/api";
 
 interface HeroProps {
   onNavigateAnalysis?: () => void;
@@ -51,8 +52,15 @@ const FEATURE_ITEMS: FocusRailItem[] = [
   },
 ];
 
+interface TickerQuote {
+  symbol: string;
+  price: number;
+}
+
 function Hero({ onNavigateAnalysis, onNavigateDashboard }: HeroProps) {
   const [titleNumber, setTitleNumber] = useState(0);
+  const [tickerQuotes, setTickerQuotes] = useState<TickerQuote[]>([]);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const titles = useMemo(
     () => ["precision", "performance", "accuracy", "intelligence"],
     [],
@@ -68,6 +76,31 @@ function Hero({ onNavigateAnalysis, onNavigateDashboard }: HeroProps) {
     }, 2000);
     return () => clearTimeout(timeoutId);
   }, [titleNumber, titles]);
+
+  useEffect(() => {
+    let mounted = true;
+    const symbols = ["MSFT", "AAPL", "NVDA", "AMZN", "GOOGL", "TSLA"];
+    void Promise.all(
+      symbols.map(async (symbol) => {
+        try {
+          const response = await mcpApi.getQuote(symbol, 60);
+          if (response.success && response.data) {
+            return { symbol, price: response.data.inr_price ?? response.data.price };
+          }
+        } catch {
+          return null;
+        }
+        return null;
+      }),
+    ).then((quotes) => {
+      if (mounted) {
+        setTickerQuotes(quotes.filter((quote): quote is TickerQuote => quote !== null));
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <section className="relative w-full overflow-hidden bg-[linear-gradient(180deg,#000000_0%,#04070f_56%,#0A0F1C_100%)] text-white">
@@ -90,7 +123,7 @@ function Hero({ onNavigateAnalysis, onNavigateDashboard }: HeroProps) {
           <div className="text-sm font-semibold tracking-[0.08em] text-white/90">
             QuantVex
           </div>
-          <div className="flex items-center gap-5 text-sm text-neutral-300">
+          <div className="hidden items-center gap-5 text-sm text-neutral-300 md:flex">
             <a
               href="/"
               className="transition hover:scale-[1.02] hover:text-white"
@@ -110,6 +143,41 @@ function Hero({ onNavigateAnalysis, onNavigateDashboard }: HeroProps) {
               Analysis
             </a>
           </div>
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen((open) => !open)}
+            className="rounded-lg border border-white/10 p-2 text-white md:hidden"
+            aria-label="Toggle navigation"
+          >
+            {mobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
+        {mobileNavOpen ? (
+          <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 pb-4 text-sm text-neutral-300 md:hidden">
+            {[
+              ["/", "Home"],
+              ["/dashboard", "Dashboard"],
+              ["/chat", "Analysis"],
+            ].map(([href, label]) => (
+              <a key={href} href={href} className="rounded-lg px-3 py-2 hover:bg-white/10 hover:text-white">
+                {label}
+              </a>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="relative z-20 border-b border-white/10 bg-black/35 py-2 text-xs text-white/70">
+        <div className="mx-auto flex max-w-6xl gap-6 overflow-hidden px-6">
+          {(tickerQuotes.length ? tickerQuotes : FEATURE_ITEMS.slice(0, 6).map((item) => ({
+            symbol: item.title,
+            price: 0,
+          }))).map((quote) => (
+            <span key={quote.symbol} className="shrink-0">
+              <span className="font-semibold text-white">{quote.symbol}</span>{" "}
+              {quote.price ? `₹${quote.price.toLocaleString("en-IN", { maximumFractionDigits: 2 })}` : "loading"}
+            </span>
+          ))}
         </div>
       </div>
 
@@ -172,6 +240,13 @@ function Hero({ onNavigateAnalysis, onNavigateDashboard }: HeroProps) {
               >
                 Open Dashboard <MoveRight className="h-4 w-4" />
               </Button>
+            </div>
+            <div className="flex flex-wrap justify-center gap-2 text-xs text-white/60">
+              {["Real-time quotes", "News ingestion", "Supply-chain graph"].map((label) => (
+                <span key={label} className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
+                  {label}
+                </span>
+              ))}
             </div>
           </div>
         </div>

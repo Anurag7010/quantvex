@@ -6,8 +6,15 @@ interface QuoteCardProps {
   onQuoteUpdate?: (quote: QuoteData) => void;
 }
 
-// Exchange rate: 1 USD = 89.94 INR
-const USD_TO_INR = 89.94;
+const formatInr = (value?: number): string =>
+  value === undefined
+    ? "₹ N/A"
+    : value.toLocaleString("en-IN", {
+        style: "currency",
+        currency: "INR",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
 
 const QuoteCard: React.FC<QuoteCardProps> = ({ onQuoteUpdate }) => {
   const [symbol, setSymbol] = useState("");
@@ -44,8 +51,8 @@ const QuoteCard: React.FC<QuoteCardProps> = ({ onQuoteUpdate }) => {
         setError(response.error || "Failed to fetch quote");
         setQuote(null);
       }
-    } catch (err: any) {
-      setError(err.message || "Network error");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Network error");
       setQuote(null);
     } finally {
       setLoading(false);
@@ -203,11 +210,7 @@ const QuoteCard: React.FC<QuoteCardProps> = ({ onQuoteUpdate }) => {
               </div>
               <div className="text-right">
                 <p className="text-4xl font-bold text-white">
-                  ₹
-                  {(quote.price * USD_TO_INR).toLocaleString("en-IN", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
+                  {formatInr(quote.inr_price)}
                 </p>
                 {priceChange && (
                   <div
@@ -224,7 +227,9 @@ const QuoteCard: React.FC<QuoteCardProps> = ({ onQuoteUpdate }) => {
                     )}
                     <span className="text-lg font-semibold">
                       {priceChange.change >= 0 ? "+" : ""}
-                      {(priceChange.change * USD_TO_INR).toFixed(2)} (
+                      {quote.inr_price && quote.inr_previous_close
+                        ? (quote.inr_price - quote.inr_previous_close).toFixed(2)
+                        : "N/A"} (
                       {priceChange.changePercent >= 0 ? "+" : ""}
                       {priceChange.changePercent.toFixed(2)}%)
                     </span>
@@ -257,13 +262,13 @@ const QuoteCard: React.FC<QuoteCardProps> = ({ onQuoteUpdate }) => {
               </div>
               <div className="flex items-center justify-between mt-2 text-xs">
                 <span className="text-red-400">
-                  Low: ₹{(quote.low * USD_TO_INR).toFixed(2)}
+                  Low: {formatInr(quote.inr_low)}
                 </span>
                 <span className="text-slate-400">
-                  Current: ₹{(quote.price * USD_TO_INR).toFixed(2)}
+                  Current: {formatInr(quote.inr_price)}
                 </span>
                 <span className="text-green-400">
-                  High: ₹{(quote.high * USD_TO_INR).toFixed(2)}
+                  High: {formatInr(quote.inr_high)}
                 </span>
               </div>
             </div>
@@ -275,7 +280,7 @@ const QuoteCard: React.FC<QuoteCardProps> = ({ onQuoteUpdate }) => {
               <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
                 <p className="text-slate-400 text-xs mb-1">Open</p>
                 <p className="text-white text-lg font-semibold">
-                  ₹{(quote.open * USD_TO_INR).toFixed(2)}
+                  {formatInr(quote.inr_open)}
                 </p>
               </div>
             )}
@@ -283,7 +288,7 @@ const QuoteCard: React.FC<QuoteCardProps> = ({ onQuoteUpdate }) => {
               <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
                 <p className="text-slate-400 text-xs mb-1">High</p>
                 <p className="text-green-400 text-lg font-semibold">
-                  ₹{(quote.high * USD_TO_INR).toFixed(2)}
+                  {formatInr(quote.inr_high)}
                 </p>
               </div>
             )}
@@ -291,7 +296,7 @@ const QuoteCard: React.FC<QuoteCardProps> = ({ onQuoteUpdate }) => {
               <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
                 <p className="text-slate-400 text-xs mb-1">Low</p>
                 <p className="text-red-400 text-lg font-semibold">
-                  ₹{(quote.low * USD_TO_INR).toFixed(2)}
+                  {formatInr(quote.inr_low)}
                 </p>
               </div>
             )}
