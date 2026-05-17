@@ -147,6 +147,49 @@ _DISRUPTION_RULES: List[Tuple[str, int, str]] = [
     (r"\bdefault\b",             7,  "financial"),
     (r"\bcredit\s+downgrade\b",  6,  "financial"),
     (r"\bliquidity\s+crisis\b",  7,  "financial"),
+
+    # Trade & regulatory — common in tech/semiconductor news
+    (r"\btariff(?:s)?\b",                               5,  "geopolitical"),
+    (r"\bexport\s+(?:control|restriction|ban)\b",       7,  "geopolitical"),
+    (r"\bimport\s+(?:ban|restriction)\b",               7,  "geopolitical"),
+    (r"\bentity\s+list\b",                              7,  "geopolitical"),
+    (r"\bblacklist(?:ed)?\b",                           6,  "geopolitical"),
+    (r"\bchip\s+ban\b",                                 8,  "geopolitical"),
+    (r"\btech(?:nology)?\s+ban\b",                      7,  "geopolitical"),
+    (r"\bde-?coupling\b",                               5,  "geopolitical"),
+
+    # Earnings / financial signals
+    (r"\bearnings\s+miss\b",                            5,  "financial"),
+    (r"\bguidance\s+(?:cut|reduced|lowered|slashed)\b", 5,  "financial"),
+    (r"\blower(?:ed)?\s+(?:guidance|outlook|forecast)\b", 4, "financial"),
+    (r"\bprofit\s+warning\b",                           6,  "financial"),
+    (r"\bdowngrade\b",                                  4,  "financial"),
+    (r"\bwrite-?down\b",                                5,  "financial"),
+    (r"\bimpairment\b",                                 4,  "financial"),
+
+    # Supply chain — softer signals
+    (r"\bproduction\s+(?:cut|cuts|reduced|slowdown|pause)\b", 5, "supply_chain"),
+    (r"\boutput\s+(?:cut|reduced|slashed|decline)\b",   5,  "supply_chain"),
+    (r"\bcapacity\s+(?:crunch|shortage|tight|constrained)\b", 5, "supply_chain"),
+    (r"\binventory\s+(?:low|tight|depleted|shortage|glut)\b", 4, "supply_chain"),
+    (r"\bsupply\s+tight\b",                             4,  "supply_chain"),
+    (r"\bsupplier\s+(?:issue|problem|warning|risk|shortage)\b", 4, "supply_chain"),
+    (r"\bheadwind(?:s)?\b",                             3,  "supply_chain"),
+    (r"\bpressure(?:d)?\b",                             2,  "supply_chain"),
+    (r"\bslowdown\b",                                   3,  "supply_chain"),
+    (r"\bconcern(?:s)?\b",                              2,  "supply_chain"),
+    (r"\bsupply\s+squeeze\b",                           5,  "supply_chain"),
+    (r"\bdemand\s+(?:drop|decline|slump|shock)\b",      4,  "supply_chain"),
+    (r"\bover(?:supply|capacity)\b",                    3,  "supply_chain"),
+
+    # Operational — softer
+    (r"\bplant\s+(?:issue|problem|idle|reduced|pause)\b", 4, "industrial"),
+    (r"\bfacility\s+(?:closure|shutdown|issue|damaged)\b", 6, "industrial"),
+    (r"\bmaintenance\s+(?:halt|shutdown|outage)\b",     4,  "industrial"),
+    (r"\baffect(?:ed|s|ing)?\b",                        2,  "supply_chain"),
+    (r"\bexpos(?:ed|ure|ing)\b",                        2,  "supply_chain"),
+    (r"\brisk(?:s|ing)?\b",                             1,  "supply_chain"),
+    (r"\bvulnerab(?:le|ility)\b",                       3,  "supply_chain"),
 ]
 
 # Pre-compile regex patterns for performance
@@ -196,6 +239,24 @@ _COMPANY_PATTERNS: List[Tuple[str, str, str]] = [
     (r"\bChevron\b|\bCVX\b",                     "CVX",    "Chevron Corp."),
     (r"\bUMC\b|united\s+microelectronics",       "UMC",    "United Microelectronics"),
     (r"\bGlobalFoundries\b",                     "GFS",    "GlobalFoundries"),
+    (r"\bMicrosoft\b|\bMSFT\b",                 "MSFT",   "Microsoft Corp."),
+    (r"\bAmazon\b|\bAMZN\b",                    "AMZN",   "Amazon.com Inc."),
+    (r"\bMeta\b|\bFacebook\b|\bMETA\b",         "META",   "Meta Platforms"),
+    (r"\bGoogle\b|\bAlphabet\b|\bGOOGL?\b",     "GOOGL",  "Alphabet Inc."),
+    (r"\bNetflix\b|\bNFLX\b",                   "NFLX",   "Netflix Inc."),
+    (r"\bBroadcom\b|\bAVGO\b",                  "AVGO",   "Broadcom Inc."),
+    (r"\bTexas\s+Instruments\b|\bTXN\b",        "TXN",    "Texas Instruments"),
+    (r"\bApplied\s+Materials\b|\bAMAT\b",       "AMAT",   "Applied Materials"),
+    (r"\bLam\s+Research\b|\bLRCX\b",            "LRCX",   "Lam Research"),
+    (r"\bKLA(?:\s+Corp\.?)?\b|\bKLAC\b",        "KLAC",   "KLA Corp."),
+    (r"\bON\s+Semiconductor\b|\bONSemi\b|\bON\b", "ON",   "ON Semiconductor"),
+    (r"\bNXP\s+Semiconductors\b|\bNXPI\b",      "NXPI",   "NXP Semiconductors"),
+    (r"\bSTMicroelectronics\b|\bSTM\b",          "STM",    "STMicroelectronics"),
+    (r"\bInfineon\b",                            "IFX",    "Infineon Technologies"),
+    (r"\bMarvell\b|\bMRVL\b",                   "MRVL",   "Marvell Technology"),
+    (r"\bMediaTek\b",                            "MDTK",   "MediaTek Inc."),
+    (r"\bHuawei\b",                              "HUAWEI", "Huawei Technologies"),
+    (r"\bSMIC\b|semiconductor\s+manufacturing\s+international", "SMIC", "SMIC"),
 ]
 
 # Commodity: maps keyword pattern → (entity_id, display_name)
@@ -316,9 +377,13 @@ class EventParser:
                 seen_ids.add(entity_id)
 
         # ------------------------------------------------------------------
-        # Build description — truncated headline (≤200 chars)
+        # Build description — title + first 150 chars of description body
         # ------------------------------------------------------------------
-        description_text = title[:200] if title else description[:200]
+        if description and description != title:
+            combined = f"{title}. {description[:150]}"
+        else:
+            combined = title
+        description_text = combined[:200] if combined else description[:200]
 
         # ------------------------------------------------------------------
         # Generate a stable, deterministic event_id from the URL + title

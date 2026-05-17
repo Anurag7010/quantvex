@@ -33,8 +33,6 @@ from mcp_server.invoke_handlers import (
 )
 from cache.redis_client import get_redis_client
 from cache.qdrant_client import get_semantic_cache
-from graph.lineage_writer import get_lineage_writer
-from graph.neo4j_client import get_neo4j_client
 from finance_mcp.graph.client import SecureGraphClient
 
 try:
@@ -117,13 +115,6 @@ async def lifespan(app: FastAPI):
         logger.info("qdrant_initialized")
     else:
         logger.warning("qdrant_initialization_failed")
-    
-    # Initialize Neo4j lineage
-    lineage_writer = get_lineage_writer()
-    if lineage_writer.initialize():
-        logger.info("neo4j_initialized")
-    else:
-        logger.warning("neo4j_initialization_failed")
     
     logger.info("mcp_server_started")
     
@@ -434,16 +425,6 @@ async def health_check():
             raise RuntimeError("Qdrant health check failed")
     except Exception as e:
         status_payload["components"]["qdrant"] = {"status": "degraded", "error": str(e)}
-        status_payload["status"] = "degraded"
-
-    try:
-        neo4j = get_neo4j_client()
-        if neo4j.ping():
-            status_payload["components"]["neo4j"] = {"status": "ok"}
-        else:
-            raise RuntimeError("Neo4j ping failed")
-    except Exception as e:
-        status_payload["components"]["neo4j"] = {"status": "degraded", "error": str(e)}
         status_payload["status"] = "degraded"
 
     status_payload["components"]["openai"] = {

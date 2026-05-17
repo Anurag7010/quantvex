@@ -8,7 +8,6 @@ from mcp_server.utils.logging import get_logger
 from mcp_server.utils.validation import InputValidator
 from mcp_server.schemas import SubscriptionRequest, SubscriptionResponse, ToolResponse
 from connectors.binance_ws import get_binance_connector
-from graph.lineage_writer import get_lineage_writer
 
 logger = get_logger(__name__)
 
@@ -53,18 +52,6 @@ async def handle_quote_stream(
             "channel": channel,
             "agent_id": agent_id
         }
-        
-        # Record lineage if agent provided
-        if agent_id:
-            lineage_writer = get_lineage_writer()
-            lineage_writer.record_agent_call(
-                agent_id=agent_id,
-                api_name="binance",
-                latency_ms=0,
-                response_code=200,
-                symbol=symbol,
-                tool_name="quote.stream"
-            )
         
         response = SubscriptionResponse(
             subscription_id=subscription_id,

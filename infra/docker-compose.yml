@@ -34,28 +34,6 @@ services:
     networks:
       - finance-mcp-net
 
-  neo4j:
-    image: neo4j:5-community
-    container_name: finance-mcp-neo4j
-    ports:
-      - "7474:7474"
-      - "7687:7687"
-    volumes:
-      - neo4j_data:/data
-      - neo4j_logs:/logs
-    environment:
-      - NEO4J_AUTH=neo4j/password123
-      - NEO4J_PLUGINS=["apoc"]
-      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -q --spider http://localhost:7474 || exit 1" ]
-      interval: 10s
-      timeout: 10s
-      retries: 20
-      start_period: 60s
-    networks:
-      - finance-mcp-net
-
   mcp-server:
     build:
       context: ..
@@ -73,8 +51,6 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
-      neo4j:
-        condition: service_healthy
     networks:
       - finance-mcp-net
       - nebula-net
@@ -83,8 +59,6 @@ services:
 volumes:
   redis_data:
   qdrant_data:
-  neo4j_data:
-  neo4j_logs:
 
 networks:
   finance-mcp-net:

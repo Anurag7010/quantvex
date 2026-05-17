@@ -227,6 +227,7 @@ class TestPipelineEarlyExit:
     @patch("finance_mcp.ingestion.pipeline.NewsClient")
     async def test_no_articles_returns_zero_events(self, MockNews, MockParser, MockIngestor):
         MockNews.return_value.fetch_market_news = AsyncMock(return_value=[])
+        MockNews.return_value.fetch_articles_fallback = AsyncMock(return_value=[])
 
         result = await run_news_ingestion_pipeline("obscure query")
 

@@ -99,7 +99,7 @@ const DashboardPage: React.FC = () => {
   );
 
   // ── Live Indian Market Overview (server-proxied, no CORS) ──────────────────
-  const [indicesLoading, setIndicesLoading] = useState(true);
+  const [, setIndicesLoading] = useState(true);
 
   const fetchIndices = useCallback(async () => {
     try {
@@ -272,7 +272,7 @@ const DashboardPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-black/70 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0a0a0f]/95 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1280px] items-center justify-between px-6 py-4 sm:px-8">
           <div className="flex items-center gap-4">
             <div className="text-lg font-semibold tracking-[-0.02em]">
@@ -287,7 +287,7 @@ const DashboardPage: React.FC = () => {
               onClick={() => handleNav("overview", "overview")}
               className={
                 activeTab === "overview"
-                  ? "text-[#8FABD4]"
+                  ? "text-[#6ea6ff]"
                   : "text-white/70 hover:text-white"
               }
             >
@@ -344,9 +344,9 @@ const DashboardPage: React.FC = () => {
           </button>
           <button
             onClick={() => navigate("/")}
-            className="rounded-xl bg-[#4A70A9] px-4 py-2 text-sm font-medium text-white transition duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.03]"
+            className="rounded-xl border border-white/10 bg-[#0f62fe]/10 text-[#6ea6ff] px-4 py-2 text-sm font-medium transition hover:bg-[#0f62fe]/20 hover:text-white duration-200"
           >
-            Home
+            ← Home
           </button>
         </div>
         {mobileNavOpen ? (

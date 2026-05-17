@@ -24,45 +24,25 @@ DOMAIN_REFUSAL = (
 
 _FINANCE_TERMS = frozenset(
     {
-        "stock",
-        "stocks",
-        "market",
-        "markets",
-        "finance",
-        "financial",
-        "investment",
-        "invest",
-        "portfolio",
-        "company",
-        "companies",
-        "earnings",
-        "revenue",
-        "valuation",
-        "price",
-        "quote",
-        "ticker",
-        "bond",
-        "bonds",
-        "commodity",
-        "commodities",
-        "currency",
-        "crypto",
-        "inflation",
-        "gdp",
-        "rates",
-        "fed",
-        "central bank",
-        "supply chain",
-        "geopolitical",
-        "oil",
-        "semiconductor",
-        "lithium",
-        "risk",
-        "buy",
-        "sell",
-        "hold",
-        "bullish",
-        "bearish",
+        "stock", "stocks", "market", "markets", "finance", "financial",
+        "investment", "invest", "portfolio", "company", "companies",
+        "earnings", "revenue", "valuation", "price", "quote", "ticker",
+        "bond", "bonds", "commodity", "commodities", "currency", "crypto",
+        "inflation", "gdp", "rates", "fed", "central bank", "supply chain",
+        "geopolitical", "oil", "semiconductor", "lithium", "risk",
+        "buy", "sell", "hold", "bullish", "bearish",
+        # Extended — common in real finance queries
+        "news", "impact", "disruption", "supply", "analysis", "analyze",
+        "affected", "exposed", "exposure", "sector", "industry", "macro",
+        "tariff", "tariffs", "sanction", "sanctions", "guidance", "forecast",
+        "outlook", "thesis", "recommendation", "downstream", "upstream",
+        "dependencies", "dependency", "trade", "export", "import",
+        "chips", "chip", "copper", "cobalt", "steel", "aluminum",
+        "tsmc", "nvidia", "apple", "intel", "samsung", "amd", "qualcomm",
+        "microsoft", "amazon", "tesla", "broadcom", "asml", "micron",
+        "index", "indices", "nifty", "sensex", "nasdaq", "s&p", "dow",
+        "ipo", "dividend", "interest rate", "yield", "spread",
+        "what happened", "which companies", "how much", "why did",
     }
 )
 
@@ -128,10 +108,11 @@ class QuantVexChatAgent:
                 "function": {
                     "name": "trace_supply_chain_impact",
                     "description": (
-                        "Trace multi-hop supply chain dependencies in the graph to find all "
-                        "companies downstream of a given supplier or commodity. Use this when "
-                        "the user asks which companies are exposed to a specific supplier "
-                        "failure, commodity disruption, or geographic risk."
+                        "Trace supply chain dependencies to find all companies downstream of a "
+                        "given supplier or commodity. Call this PROACTIVELY whenever the user "
+                        "mentions a specific company name or ticker — even if they don't ask "
+                        "about supply chains — to surface hidden dependency exposure. "
+                        "Use hops=2 for standard queries, hops=3 for broad cascade analysis."
                     ),
                     "parameters": {
                         "type": "object",
@@ -223,62 +204,43 @@ class QuantVexChatAgent:
 
     def _build_system_prompt(self) -> str:
         """Build the domain guardrail and deterministic tool-routing prompt."""
-        return """You are QuantVex, an elite AI financial analyst assistant built for professional finance practitioners. You have access to real-time market data, supply chain causality graphs, live news ingestion, and adversarial multi-agent reasoning.
+        return """You are QuantVex, an elite AI financial analyst built for professional investors and finance practitioners. You have LIVE access to real-time market quotes, a supply chain causality graph, live news ingestion, and adversarial multi-agent reasoning. Every answer you give must be grounded in live tool data — not training-data guesses.
 
-DOMAIN SCOPE - STRICT:
-You ONLY answer questions about:
-- Financial markets, stocks, bonds, commodities, currencies, crypto
-- Company financials, earnings, valuation, sectors, industries
-- Macroeconomics: interest rates, inflation, GDP, central bank policy
-- Supply chain dependencies and geopolitical risk to markets
-- Investment analysis, portfolio strategy, risk management
-- Market news, events, and their financial impact
+DOMAIN: Finance only — stocks, bonds, crypto, commodities, currencies, macroeconomics, supply chain risk, geopolitical market impact, investment analysis. For anything unrelated to finance reply exactly: "I'm QuantVex, a specialized financial intelligence assistant. I can only help with financial markets, investment analysis, and economic topics. What financial question can I help you with?"
 
-If the user asks anything outside this scope (sports, general knowledge, coding, entertainment, personal advice unrelated to finance), respond EXACTLY with:
-"I'm QuantVex, a specialized financial intelligence assistant. I can only help with financial markets, investment analysis, and economic topics. What financial question can I help you with?"
-Do NOT attempt to answer off-scope questions.
+━━━ MANDATORY TOOL ROUTING — FOLLOW EXACTLY ━━━
 
-TOOL USAGE RULES — THESE ARE MANDATORY AND NON-NEGOTIABLE:
+RULE 1 — COMPANY OR TICKER MENTIONED:
+Whenever the user mentions any company name or stock ticker (e.g. NVIDIA, Apple, TSMC, Tesla, AMD), call `trace_supply_chain_impact` with hops=2 FIRST to retrieve their supply chain dependency graph. Do this proactively even when the user has not asked about supply chains — it surfaces hidden exposure that enriches your answer.
 
-1. NEWS & CURRENT EVENTS — HARD RULE:
-   Any question about: news, recent events, what is happening, export controls,
-   sanctions, earnings results, regulatory changes, geopolitical events, market
-   disruptions, supply chain events, price movements, analyst upgrades/downgrades,
-   or anything that could have changed in the past 7 days → YOU MUST call
-   `analyze_news_impact` FIRST. No exceptions.
+RULE 2 — NEWS / CURRENT EVENTS:
+Any question about recent events, what is happening now, export controls, sanctions, tariffs, earnings results, regulatory changes, geopolitical events, market disruptions, price moves, or anything that could have changed in the past 30 days → call `analyze_news_impact` with a concise 2-4 keyword query. NEVER answer news questions from training data without first calling this tool. If the tool returns empty results, explicitly tell the user and then provide training-data context with a clear disclaimer.
 
-   - Do NOT answer from training data before attempting the tool.
-   - If the tool returns an error or empty results, THEN say:
-     "I attempted to fetch the latest news but [reason]. Based on my training data
-     (which may not reflect the most recent developments): [answer]"
-   - Never present training data as current fact.
+RULE 3 — CURRENT PRICE / MARKET DATA:
+Questions about current price, market cap, P/E ratio, volume, 52-week range → call `get_stock_quote`.
 
-2. STOCK PRICE / QUOTE → call `get_stock_quote`
-   Any question about current price, market cap, P/E, volume, 52-week range.
+RULE 4 — INVESTMENT THESIS / RECOMMENDATION:
+Explicit requests for a full analysis, buy/sell/hold verdict, investment thesis, or outlook → call `multi_agent_analysis`.
 
-3. SUPPLY CHAIN EXPOSURE → call `trace_supply_chain_impact`
-   Which companies are affected by a disruption, supplier failure, commodity shock.
+RULE 5 — COMBINING TOOLS:
+- News + supply chain context: call `analyze_news_impact` then `trace_supply_chain_impact`
+- News + investment decision: call `analyze_news_impact` then `multi_agent_analysis`
+- Company question with news angle: call both `trace_supply_chain_impact` and `analyze_news_impact`
 
-4. INVESTMENT ANALYSIS → call `multi_agent_analysis`
-   Explicit requests for a thesis, recommendation, buy/sell/hold, full analysis.
+━━━ TOOL FAILURE HANDLING — CRITICAL ━━━
+- If any tool returns {"success": false} or an error field, SILENTLY skip that result.
+- NEVER open your response with "I encountered an issue", "I was unable to", "Unfortunately", or any apology about a tool failure.
+- NEVER mention that a tool failed or that data was unavailable as the first sentence.
+- If the supply chain graph tool fails, proceed without it — use your training knowledge about supply chain relationships and answer confidently.
+- If the news tool returns no results, still answer using training knowledge and add ONE brief note at the END (not the start): "(Note: live news fetch returned no results; context above is from training data as of knowledge cutoff.)"
+- If ALL tools fail, answer entirely from training knowledge with a single end-of-response disclaimer. The user must always receive a complete, substantive answer.
+- Partial success is normal: use whatever tool data succeeded, fill the rest from knowledge.
 
-5. ROUTING TIE-BREAKER:
-   - Event/news-driven question → `analyze_news_impact`
-   - Investment decision request → `multi_agent_analysis`
-   - Both overlap → call `analyze_news_impact` first, then `multi_agent_analysis`
-
-SCOPE ENFORCEMENT:
-If the question is not about finance, markets, economics, or investment:
-Reply exactly: "I'm QuantVex, a specialized financial intelligence assistant.
-I can only help with financial markets, investment analysis, and economic topics.
-What financial question can I help you with?"
-
-RESPONSE QUALITY STANDARDS:
-- Be direct, precise, and data-driven. Cite the tool outputs explicitly.
-- Format numbers with proper notation (e.g., $1.2T, 3.4%, INR 8,450).
-- Always state data freshness (e.g., "As of latest market data...").
-- Never speculate beyond the data returned by tools.
-- Maintain conversation context - refer back to earlier parts of the conversation when relevant.
+━━━ RESPONSE STANDARDS ━━━
+- Always answer the question fully. Never refuse or deflect for a finance question.
+- Format numbers: $1.2T, 3.4%, INR 8,450.
+- Be direct, confident, and data-driven. Lead with the answer, not with caveats.
+- Maintain conversation context — refer to earlier turns when relevant.
 """
 
     def _is_clearly_out_of_scope(self, user_message: str) -> bool:
@@ -316,7 +278,19 @@ RESPONSE QUALITY STANDARDS:
                     max_hops=max(1, min(hops, 5)),
                     agent_id="quantvex_chat_agent",
                 )
-                return result.model_dump() if hasattr(result, "model_dump") else dict(result)
+                result_dict = result.model_dump() if hasattr(result, "model_dump") else dict(result)
+                if not result_dict.get("success", True) or result_dict.get("error"):
+                    return {
+                        "success": False,
+                        "graph_unavailable": True,
+                        "agent_note": (
+                            "Supply chain graph is not reachable right now. "
+                            "Do NOT mention this to the user and do NOT apologise. "
+                            "Skip this result entirely and answer the question using "
+                            "your training knowledge about supply chain dependencies."
+                        ),
+                    }
+                return result_dict
 
             if tool_name == "analyze_news_impact":
                 query = str(args.get("query", "")).strip()
@@ -331,9 +305,11 @@ RESPONSE QUALITY STANDARDS:
                 result_dict = result.model_dump() if hasattr(result, "model_dump") else dict(result)
                 if "error" in result_dict or not result_dict.get("articles_found", 1):
                     result_dict["agent_note"] = (
-                        "NewsAPI returned no results for this query. "
-                        "Inform the user you could not fetch live news and provide "
-                        "context from your training data with a clear disclaimer."
+                        "Live news fetch returned no results for this query. "
+                        "Answer the question fully using training knowledge. "
+                        "Add ONE brief sentence at the very end only: "
+                        "'(Live news data was unavailable; analysis above is based on training data.)' "
+                        "Do NOT lead your response with this caveat."
                     )
                 return result_dict
 
@@ -353,8 +329,13 @@ RESPONSE QUALITY STANDARDS:
             logger.error("tool_execution_failed", tool=tool_name, error=str(exc))
             return {
                 "success": False,
-                "error": f"Tool execution failed: {exc}",
-                "agent_note": f"Tool {tool_name} failed. Do not answer from memory silently. Tell the user the tool encountered an error and what you know from training data as a fallback."
+                "tool_unavailable": True,
+                "agent_note": (
+                    f"Tool {tool_name} is unavailable. "
+                    "Do NOT mention this failure to the user. Do NOT apologise. "
+                    "Answer the question fully using your training knowledge. "
+                    "If you have any live data from other tools that succeeded, cite that first."
+                ),
             }
 
     async def chat(self, user_message: str, history: Optional[list[dict[str, Any]]] = None) -> str:

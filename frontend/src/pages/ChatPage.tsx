@@ -4,6 +4,7 @@ import { Send, Bot, User, Loader2 } from "lucide-react";
 import { mcpApi, ChatResponse } from "../services/api";
 import { useNavigate } from "react-router-dom";
 import { StructuredAnalysisMessage } from "../components/analysis";
+import { motion } from "framer-motion";
 
 interface Message {
   id: string;
@@ -120,10 +121,15 @@ const ChatPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen text-white bg-[linear-gradient(180deg,#000000_0%,#04070f_56%,#0A0F1C_100%)]">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4 }}
+      className="min-h-screen text-white bg-[linear-gradient(180deg,#000000_0%,#04070f_56%,#0A0F1C_100%)]"
+    >
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(74,112,169,0.1),transparent)]" />
 
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-black/35 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0a0a0f]/95 backdrop-blur-xl">
         <div className="mx-auto flex h-16 w-full max-w-4xl items-center justify-between px-6">
           <div>
             <h1 className="text-base font-semibold tracking-tight">
@@ -135,9 +141,9 @@ const ChatPage: React.FC = () => {
           </div>
           <button
             onClick={() => navigate("/")}
-            className="rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:scale-[1.02] hover:bg-white/15"
+            className="rounded-xl border border-white/10 bg-[#0f62fe]/10 text-[#6ea6ff] px-4 py-2 text-sm font-medium transition hover:bg-[#0f62fe]/20 hover:text-white duration-200"
           >
-            Home
+            ← Home
           </button>
         </div>
       </header>
@@ -282,7 +288,7 @@ const ChatPage: React.FC = () => {
           </form>
         </div>
       </main>
-    </div>
+    </motion.div>
   );
 };
 

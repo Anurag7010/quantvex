@@ -14,8 +14,6 @@ from cache.redis_client import get_redis_client
 from cache.qdrant_client import get_semantic_cache
 from connectors.alpha_vantage import get_alpha_vantage_connector
 from connectors.finnhub import get_finnhub_connector
-from graph.lineage_writer import get_lineage_writer
-
 logger = get_logger(__name__)
 
 CRYPTO_SYMBOLS = {"BTC", "ETH", "BNB", "SOL", "XRP", "ADA", "DOGE", "AVAX", "DOT", "MATIC"}
@@ -52,7 +50,6 @@ async def handle_quote_latest(
         
         redis_client = get_redis_client()
         semantic_cache = get_semantic_cache()
-        lineage_writer = get_lineage_writer()
 
         if query_text:
             semantic_hit = semantic_cache.search_similar(
@@ -126,9 +123,6 @@ async def handle_quote_latest(
                 query_text=query_text,
                 response_text=json.dumps(_quote_to_dict(quote))
             )
-        
-        if agent_id:
-            lineage_writer.record_quote_fetch(quote, agent_id)
         
         latency_ms = (time.time() - start_time) * 1000
         quote.latency_ms = latency_ms
