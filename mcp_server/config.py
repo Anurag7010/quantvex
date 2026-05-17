@@ -13,10 +13,6 @@ class Settings(BaseSettings):
     qdrant_port: int = 6333
     qdrant_collection: str = "AgentResponse"
 
-    neo4j_uri: str = "bolt://localhost:7687"
-    neo4j_user: str = "neo4j"
-    neo4j_password: str = "password123"
-
     alpha_vantage_api_key: str = "demo"
     finnhub_api_key: str = "demo"
     binance_ws_url: str = "wss://stream.binance.com:9443/ws"
