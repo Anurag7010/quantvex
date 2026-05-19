@@ -78,22 +78,22 @@ React frontend  →  POST /chat or /invoke  →  FastAPI (mcp_server/server.py)
 
 ### Key Modules
 
-| Path | Role |
-|------|------|
-| `mcp_server/server.py` | All HTTP endpoints; auth (`X-API-Key`), rate limiting, CORS |
-| `mcp_server/chat_agent.py` | GPT-4o agent with finance domain guardrails and 20-turn history |
-| `mcp_server/capabilities.json` | MCP tool catalog (schema definitions for all five tools) |
-| `mcp_server/config.py` | All settings via `pydantic_settings`; loaded from `.env` |
-| `mcp_server/invoke_handlers/` | One file per MCP tool (`quote_latest`, `quote_stream`, `trace_impact`, `news_analysis`, `multi_agent_analysis`) |
-| `src/finance_mcp/graph/client.py` | `SecureGraphClient` — parameterised NebulaGraph queries, injection-safe |
-| `src/finance_mcp/graph/queries.py` | Immutable nGQL templates (never build query strings inline) |
-| `src/finance_mcp/reasoning/` | `bull_agent.py`, `bear_agent.py`, `judge_agent.py`, `orchestrator.py` — concurrent execution via asyncio |
-| `src/finance_mcp/news/` | NewsData.io adapter + rule-based disruption event parser |
-| `src/finance_mcp/ingestion/` | Writes Event vertices + `IMPACTS` edges into NebulaGraph |
-| `connectors/` | Market data adapters: Finnhub (primary), Alpha Vantage (fallback), Binance WebSocket |
-| `cache/redis_client.py` | Hot quote snapshot cache |
-| `cache/qdrant_client.py` | Semantic cache (sentence-transformers, threshold 0.86) |
-| `frontend/src/services/api.ts` | Typed Axios API client |
+| Path                               | Role                                                                                                            |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `mcp_server/server.py`             | All HTTP endpoints; auth (`X-API-Key`), rate limiting, CORS                                                     |
+| `mcp_server/chat_agent.py`         | GPT-4o agent with finance domain guardrails and 20-turn history                                                 |
+| `mcp_server/capabilities.json`     | MCP tool catalog (schema definitions for all five tools)                                                        |
+| `mcp_server/config.py`             | All settings via `pydantic_settings`; loaded from `.env`                                                        |
+| `mcp_server/invoke_handlers/`      | One file per MCP tool (`quote_latest`, `quote_stream`, `trace_impact`, `news_analysis`, `multi_agent_analysis`) |
+| `src/finance_mcp/graph/client.py`  | `SecureGraphClient` — parameterised NebulaGraph queries, injection-safe                                         |
+| `src/finance_mcp/graph/queries.py` | Immutable nGQL templates (never build query strings inline)                                                     |
+| `src/finance_mcp/reasoning/`       | `bull_agent.py`, `bear_agent.py`, `judge_agent.py`, `orchestrator.py` — concurrent execution via asyncio        |
+| `src/finance_mcp/news/`            | NewsData.io adapter + rule-based disruption event parser                                                        |
+| `src/finance_mcp/ingestion/`       | Writes Event vertices + `IMPACTS` edges into NebulaGraph                                                        |
+| `connectors/`                      | Market data adapters: Finnhub (primary), Alpha Vantage (fallback), Binance WebSocket                            |
+| `cache/redis_client.py`            | Hot quote snapshot cache                                                                                        |
+| `cache/qdrant_client.py`           | Semantic cache (sentence-transformers, threshold 0.86)                                                          |
+| `frontend/src/services/api.ts`     | Typed Axios API client                                                                                          |
 
 ### Data / Cache Waterfall
 

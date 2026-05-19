@@ -1,7 +1,27 @@
 import React, { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, useScroll, useTransform } from "framer-motion";
-import { ArrowRight, TrendingUp, BarChart3, Network, Zap } from "lucide-react";
+import {
+  ArrowRight,
+  ArrowUpRight,
+  Sparkle,
+  TrendingUp,
+  BarChart3,
+  Network,
+  Zap,
+  Database,
+  Globe,
+  Activity,
+  Server,
+  Code2,
+  LineChart,
+  Search,
+  Layers,
+  PieChart,
+  Monitor,
+  GitBranch,
+  Share2,
+} from "lucide-react";
 
 // ─── Logo ────────────────────────────────────────────────────────────────────
 function LogoIcon({ className = "w-7 h-7" }: { className?: string }) {
@@ -191,42 +211,41 @@ const BACKER_BRANDS = [
   },
 ];
 
-// ─── Feature cards data ───────────────────────────────────────────────────────
-const FEATURE_CARDS = [
-  {
-    colSpan: "lg:col-span-2",
-    bg: "bg-gradient-to-br from-[#0f62fe]/20 to-[#0a0a0f] border border-[#0f62fe]/30",
-    title: "Live Market\nIntelligence",
-    icon: <TrendingUp className="w-6 h-6 text-[#0f62fe]" />,
-    body: "Real-time quotes from Finnhub, Alpha Vantage, and Binance with a two-level semantic + Redis cache waterfall. Always fresh, always fast.",
-  },
-  {
-    colSpan: "lg:col-span-1",
-    bg: "bg-[#16161f] border border-white/10",
-    title: "Supply Chain\nCausality",
-    icon: <Network className="w-6 h-6 text-white/40" />,
-    body: "Multi-hop graph traversal over 57 companies and 20 commodities reveals hidden exposure to any disruption instantly.",
-  },
-  {
-    colSpan: "lg:col-span-1",
-    bg: "bg-[#16161f] border border-white/10",
-    title: "Multi-Agent\nReasoning",
-    icon: <Zap className="w-6 h-6 text-white/40" />,
-    body: "Bull and Bear agents run concurrently. A Judge agent synthesises both into a decisive investment verdict with confidence score.",
-  },
+// ─── Info section — tech stack icon rows ──────────────────────────────────────
+const STACK_ROW_1 = [
+  TrendingUp,
+  BarChart3,
+  Network,
+  Database,
+  Globe,
+  Activity,
+  Server,
+  Zap,
+];
+const STACK_ROW_2 = [
+  Code2,
+  LineChart,
+  Search,
+  Layers,
+  PieChart,
+  Monitor,
+  GitBranch,
+  Share2,
 ];
 
 // ─── Nav link map ─────────────────────────────────────────────────────────────
 const NAV_LINKS: { label: string; sectionId: string }[] = [
-  { label: "Market Data",  sectionId: "market-data" },
-  { label: "Analysis",     sectionId: "analysis" },
+  { label: "Market Data", sectionId: "market-data" },
+  { label: "Analysis", sectionId: "analysis" },
   { label: "Supply Chain", sectionId: "market-data" },
-  { label: "News",         sectionId: "use-cases" },
-  { label: "About",        sectionId: "about" },
+  { label: "News", sectionId: "use-cases" },
+  { label: "About", sectionId: "about" },
 ];
 
 function scrollTo(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  document
+    .getElementById(id)
+    ?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // ─── Navbar ───────────────────────────────────────────────────────────────────
@@ -261,7 +280,7 @@ function Navbar({ onOpenApp }: { onOpenApp: () => void }) {
           onClick={onOpenApp}
           className="bg-white text-black text-base font-medium px-7 py-2.5 rounded-full hover:bg-white/90 transition-colors duration-200"
         >
-          Open App
+          Log In
         </button>
       </div>
     </nav>
@@ -290,7 +309,10 @@ function HeroSection({ onGetStarted }: { onGetStarted: () => void }) {
           playsInline
           className="absolute inset-0 w-full h-full object-cover"
         >
-          <source src="/bd-video.mp4" type="video/mp4" />
+          <source
+            src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260315_073750_51473149-4350-4920-ae24-c8214286f323.mp4"
+            type="video/mp4"
+          />
         </video>
 
         {/* Gradient overlay */}
@@ -359,78 +381,265 @@ function HeroSection({ onGetStarted }: { onGetStarted: () => void }) {
   );
 }
 
+// ─── Section label ─────────────────────────────────────────────────────────────
+function SectionLabel({
+  children,
+  align = "center",
+}: {
+  children: React.ReactNode;
+  align?: "center" | "left";
+}) {
+  return (
+    <div
+      className={`flex items-center gap-2 mb-4 ${
+        align === "center" ? "justify-center" : "justify-start"
+      }`}
+    >
+      <Sparkle className="h-3 w-3 text-white/70" strokeWidth={1.5} />
+      <span className="uppercase tracking-[0.22em] text-[11px] text-white/70">
+        {children}
+      </span>
+      <Sparkle className="h-3 w-3 text-white/70" strokeWidth={1.5} />
+    </div>
+  );
+}
+
 // ─── Info Section ─────────────────────────────────────────────────────────────
+const ARCH_ROWS = [
+  ["Built", "MCP Platform", "FastAPI + GPT-4o"],
+  ["Live", "Graph Engine", "NebulaGraph"],
+  ["Live", "Multi-Agent", "Bull & Bear Debate"],
+  ["Live", "Cache Layer", "Qdrant + Redis"],
+] as const;
+
 function InfoSection({ onExplore }: { onExplore: () => void }) {
   return (
-    <section id="market-data" className="bg-[#0a0a0f] px-6 py-24">
-      <div className="max-w-[88rem] mx-auto">
-        {/* Row 1 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mb-16 items-start">
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
+    <section
+      id="market-data"
+      className="bg-[#0a0a0f] px-4 sm:px-6 md:px-10 lg:px-14 py-6 sm:py-8 md:py-10 lg:h-screen flex flex-col antialiased"
+    >
+      {/* ── Header row ── */}
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-5 mb-5">
+        <div className="max-w-3xl">
+          <motion.h2
+            initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
+            className="text-white text-[28px] sm:text-3xl md:text-4xl lg:text-[44px] font-normal leading-[1.15] tracking-tight mb-3"
           >
-            <h2
-              className="text-white text-4xl md:text-5xl font-medium leading-tight mb-8"
-              style={{ letterSpacing: "-0.03em" }}
-            >
-              Meet QuantVex.
-            </h2>
-            <PillButton onClick={onExplore} dark={false}>
-              Explore Platform
-            </PillButton>
-          </motion.div>
-
+            Meet QuantVex.
+          </motion.h2>
           <motion.p
-            initial={{ opacity: 0, y: 40 }}
+            initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-white/70 text-2xl md:text-3xl leading-relaxed"
+            className="text-sm md:text-[15px] leading-[1.6] text-white/60 max-w-3xl"
           >
             QuantVex is an AI-powered financial intelligence platform. Real-time
             quotes, supply chain causality traversal, live news impact, and
             adversarial multi-agent reasoning — all grounded in live data.
           </motion.p>
         </div>
-
-        {/* Feature cards */}
-        <motion.div
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
-          initial="hidden"
-          whileInView="visible"
+        <motion.button
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
-          variants={{
-            hidden: {},
-            visible: { transition: { staggerChildren: 0.1 } },
-          }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          onClick={onExplore}
+          className="liquid-glass shrink-0 text-white text-sm font-medium px-5 sm:px-6 py-2.5 sm:py-3 rounded-full border border-white/20 hover:bg-white/10 transition-colors duration-200"
         >
-          {FEATURE_CARDS.map((card, i) => (
-            <motion.div
-              key={i}
-              variants={{
-                hidden: { opacity: 0, y: 30 },
-                visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
-              }}
-              className={`${card.colSpan} ${card.bg} rounded-2xl p-7 min-h-80 flex flex-col justify-between`}
+          Explore Platform
+        </motion.button>
+      </div>
+
+      {/* ── 3-col grid ── */}
+      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 min-h-0">
+        {/* Col 1 — Architecture */}
+        <div className="relative rounded-2xl bg-black overflow-hidden flex flex-col min-h-[340px] lg:min-h-0">
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover opacity-55"
+          >
+            <source
+              src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260511_230229_7c9bc431-46cf-489a-948d-e8144d8eb5d4.mp4"
+              type="video/mp4"
+            />
+          </video>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/30" />
+
+          <div className="relative z-10 flex flex-col justify-between h-full p-5 md:p-6">
+            <SectionLabel>Architecture</SectionLabel>
+
+            {/* Timeline */}
+            <div
+              className="grid gap-y-3 gap-x-2"
+              style={{ gridTemplateColumns: "auto auto 1fr auto" }}
             >
-              <div className="flex items-start justify-between mb-4">
-                <h3
-                  className="text-white text-2xl font-medium leading-snug whitespace-pre-line"
-                  style={{ letterSpacing: "-0.02em" }}
-                >
-                  {card.title}
-                </h3>
-                {card.icon}
-              </div>
-              <p className="text-white/60 text-base leading-relaxed">
-                {card.body}
+              {ARCH_ROWS.map(([year, role, place], i) => (
+                <React.Fragment key={i}>
+                  <span className="text-[11px] text-white/50 whitespace-nowrap pr-1">
+                    {year}
+                  </span>
+                  <Sparkle
+                    className="h-3 w-3 text-white/60 mt-px"
+                    strokeWidth={1.5}
+                  />
+                  <span className="text-[11px] text-white/80 px-1">{role}</span>
+                  <span className="text-[11px] text-white/40 text-right">
+                    {place}
+                  </span>
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Col 2 — stacked: data pipeline + supply chain stat */}
+        <div className="grid md:grid-rows-[auto_1fr] gap-4 md:gap-5">
+          {/* Data Pipeline */}
+          <div className="relative rounded-2xl bg-[#2b4e74] p-5 md:p-6 noise-overlay overflow-hidden">
+            <SectionLabel align="left">Data Pipeline</SectionLabel>
+            <div className="flex flex-col gap-2.5">
+              {[
+                {
+                  step: "01",
+                  label: "Qdrant Semantic Cache",
+                  note: "threshold 0.86",
+                },
+                {
+                  step: "02",
+                  label: "Redis Snapshot Cache",
+                  note: "hot quote store",
+                },
+                {
+                  step: "03",
+                  label: "Finnhub REST API",
+                  note: "primary source",
+                },
+                { step: "04", label: "Alpha Vantage REST", note: "fallback" },
+              ].map(({ step, label, note }) => (
+                <div key={step} className="flex items-center gap-3">
+                  <span className="text-[10px] font-mono text-white/35 w-5 shrink-0">
+                    {step}
+                  </span>
+                  <div className="flex-1 h-px bg-white/10" />
+                  <span className="text-[12px] text-white/80">{label}</span>
+                  <span className="text-[11px] text-white/35">{note}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Supply chain stat */}
+          <div className="relative rounded-2xl bg-black overflow-hidden flex items-center justify-center min-h-[180px]">
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover opacity-45"
+            >
+              <source
+                src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260508_064209_0cb7d815-ff61-4caa-a6d5-bbff145ab272.mp4"
+                type="video/mp4"
+              />
+            </video>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/40" />
+            <div className="relative z-10 text-center px-4">
+              <p className="text-5xl sm:text-6xl md:text-7xl lg:text-[88px] font-light tracking-tight text-white drop-shadow">
+                57+
               </p>
-            </motion.div>
-          ))}
-        </motion.div>
+              <p className="text-white/85 text-sm mt-2">
+                Companies in supply chain graph
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Col 3 — stacked: tech stack + get started */}
+        <div className="grid grid-rows-[1fr_auto] gap-4 md:gap-5">
+          {/* Tech Stack */}
+          <div className="relative rounded-2xl bg-black overflow-hidden flex flex-col min-h-[260px]">
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover opacity-40"
+            >
+              <source
+                src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260406_094145_4a271a6c-3869-4f1c-8aa7-aeb0cb227994.mp4"
+                type="video/mp4"
+              />
+            </video>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/50" />
+
+            <div className="relative z-10 flex flex-col justify-between h-full p-5 md:p-6">
+              <SectionLabel>Tech Stack</SectionLabel>
+
+              <div className="flex flex-col gap-3">
+                {/* Row 1 — scrolls left */}
+                <div className="overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
+                  <div className="flex gap-3 animate-marquee-left">
+                    {[...STACK_ROW_1, ...STACK_ROW_1].map((Icon, i) => (
+                      <div
+                        key={i}
+                        className="liquid-glass shrink-0 h-14 w-14 md:h-16 md:w-16 rounded-xl flex items-center justify-center"
+                      >
+                        <Icon
+                          className="h-5 w-5 text-white/70"
+                          strokeWidth={1.5}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Row 2 — scrolls right */}
+                <div className="overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
+                  <div className="flex gap-3 animate-marquee-right">
+                    {[...STACK_ROW_2, ...STACK_ROW_2].map((Icon, i) => (
+                      <div
+                        key={i}
+                        className="liquid-glass shrink-0 h-14 w-14 md:h-16 md:w-16 rounded-xl flex items-center justify-center"
+                      >
+                        <Icon
+                          className="h-5 w-5 text-white/70"
+                          strokeWidth={1.5}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Get Started */}
+          <div className="relative rounded-2xl bg-[#2b4e74] p-5 md:p-6 noise-overlay overflow-hidden">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <SectionLabel align="left">Get Started</SectionLabel>
+                <p className="text-[13px] text-white/70 mb-1">Open Dashboard</p>
+              </div>
+              <button
+                onClick={onExplore}
+                className="liquid-glass shrink-0 h-9 w-9 rounded-full flex items-center justify-center border border-white/20 hover:bg-white/10 transition-colors duration-200"
+                aria-label="Open platform"
+              >
+                <ArrowUpRight
+                  className="h-4 w-4 text-white"
+                  strokeWidth={1.5}
+                />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -577,7 +786,10 @@ const ABOUT_PILLARS = [
 
 function AboutSection({ onOpenApp }: { onOpenApp: () => void }) {
   return (
-    <section id="about" className="bg-[#0a0a0f] px-6 py-24 border-t border-white/5">
+    <section
+      id="about"
+      className="bg-[#0a0a0f] px-6 py-24 border-t border-white/5"
+    >
       <div className="max-w-[88rem] mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mb-16 items-start">
           <motion.div
@@ -615,7 +827,7 @@ function AboutSection({ onOpenApp }: { onOpenApp: () => void }) {
           </motion.p>
         </div>
 
-        <motion.div
+        {/* <motion.div
           className="grid grid-cols-1 sm:grid-cols-3 gap-4"
           initial="hidden"
           whileInView="visible"
@@ -645,7 +857,7 @@ function AboutSection({ onOpenApp }: { onOpenApp: () => void }) {
               </p>
             </motion.div>
           ))}
-        </motion.div>
+        </motion.div> */}
       </div>
     </section>
   );
@@ -679,8 +891,8 @@ export default function LandingPage() {
     <div className="flex flex-col bg-[#0a0a0f] min-h-screen">
       {/* Hero — full screen wrapper */}
       <div className="h-screen flex flex-col overflow-hidden relative">
-        <Navbar onOpenApp={() => navigate("/dashboard")} />
-        <HeroSection onGetStarted={() => navigate("/signup")} />
+        <Navbar onOpenApp={() => navigate("/login")} />
+        <HeroSection onGetStarted={() => navigate("/dashboard")} />
       </div>
 
       {/* Below-fold sections */}
