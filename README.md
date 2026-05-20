@@ -63,11 +63,6 @@ User query → GPT-4o selects tool → tool executes against live data/graph/new
 - Full conversation history with 20-turn rolling context window
 - Deterministic tool routing: the model cannot answer news questions from memory
 
-**Lineage Observability**
-
-- Every API call, agent invocation, and stream event is recorded in Neo4j
-- Full audit trail of what data was used to produce each answer
-
 ---
 
 ## Architecture
@@ -99,11 +94,6 @@ Binance WS     20 commodities EventIngestor  Judge Agent
               ┌──────────▼──────────┐
               │      Cache Layer     │
               │  Redis · Qdrant      │
-              └──────────┬──────────┘
-                         │
-              ┌──────────▼──────────┐
-              │  Neo4j Lineage Graph │
-              │  (Audit / Observ.)   │
               └─────────────────────┘
 ```
 
@@ -116,7 +106,6 @@ Binance WS     20 commodities EventIngestor  Judge Agent
 | AI Reasoning       | OpenAI GPT-4o (function calling)                            |
 | Backend            | FastAPI 0.104, Python 3.11, Uvicorn                         |
 | Supply Chain Graph | NebulaGraph (nGQL)                                          |
-| Lineage Graph      | Neo4j 5 (Cypher)                                            |
 | Semantic Cache     | Qdrant + sentence-transformers (all-MiniLM-L6-v2)           |
 | Hot Cache          | Redis 5                                                     |
 | Market Data        | Finnhub REST, Alpha Vantage REST, Binance WebSocket         |
@@ -177,10 +166,6 @@ quantvex/
 │   ├── redis_client.py         # Snapshot + stream APIs
 │   └── qdrant_client.py        # Semantic cache with similarity threshold
 │
-├── graph/                      # Neo4j lineage observability
-│   ├── neo4j_client.py         # Schema + CRUD for audit nodes
-│   └── lineage_writer.py       # Records every call into Neo4j
-│
 ├── frontend/                   # React application
 │   └── src/
 │       ├── pages/              # HomePage · ChatPage · DashboardPage
@@ -196,8 +181,7 @@ quantvex/
 │   └── e2e_pipeline.py         # End-to-end smoke test
 │
 ├── infra/                      # Docker Compose for backend services
-├── docker/                     # NebulaGraph cluster compose
-└── docs/                       # Architecture and fix documentation
+└── docker/                     # NebulaGraph cluster compose
 ```
 
 ---
@@ -324,9 +308,6 @@ REDIS_HOST=localhost
 REDIS_PORT=6379
 QDRANT_HOST=localhost
 QDRANT_PORT=6333
-NEO4J_URI=bolt://localhost:7687
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=password123
 NEBULA_HOST=localhost
 NEBULA_PORT=9669
 
@@ -337,7 +318,7 @@ ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 ### 3. Start infrastructure
 
 ```bash
-# Start Redis, Qdrant, Neo4j, MCP server
+# Start Redis, Qdrant, and the MCP server container
 cd infra && docker-compose up -d
 
 # Start NebulaGraph cluster (required for supply chain graph)
@@ -492,9 +473,6 @@ pytest tests/ --cov=mcp_server --cov=src/finance_mcp --cov-report=term-missing
 | `REDIS_PORT`            | ✅       | Redis port (default: 6379)       |
 | `QDRANT_HOST`           | ✅       | Qdrant hostname                  |
 | `QDRANT_PORT`           | ✅       | Qdrant port (default: 6333)      |
-| `NEO4J_URI`             | ✅       | Neo4j bolt URI                   |
-| `NEO4J_USER`            | ✅       | Neo4j username                   |
-| `NEO4J_PASSWORD`        | ✅       | Neo4j password                   |
 | `NEBULA_HOST`           | ✅       | NebulaGraph graphd hostname      |
 | `NEBULA_PORT`           | ✅       | NebulaGraph port (default: 9669) |
 | `ALLOWED_ORIGINS`       | ✅       | Comma-separated CORS origins     |
