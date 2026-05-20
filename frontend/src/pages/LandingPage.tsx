@@ -810,7 +810,7 @@ function AboutSection({ onOpenApp }: { onOpenApp: () => void }) {
               Clarity.
             </h2>
             <PillButton onClick={onOpenApp} dark={false}>
-              Start for Free
+              Explore Platform
             </PillButton>
           </motion.div>
 
