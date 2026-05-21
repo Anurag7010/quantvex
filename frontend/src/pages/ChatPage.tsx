@@ -1,16 +1,30 @@
 import React, { useState, useRef, useEffect } from "react";
 import { AnimatedAIChat } from "../components/ui/animated-ai-chat";
 import { Send, Bot, User, Loader2 } from "lucide-react";
-import { mcpApi, ChatResponse } from "../services/api";
+import { mcpApi, ChatResponse, MultiAgentAnalysisData } from "../services/api";
 import { useNavigate } from "react-router-dom";
 import { StructuredAnalysisMessage } from "../components/analysis";
+import StreamingAnalysis from "../components/StreamingAnalysis";
 import { motion } from "framer-motion";
+
+// Match "analyze NVDA", "NVDA analysis", "analyse TSMC", "AAPL supply chain risk", etc.
+const ANALYSIS_RE = /\b(analyz[es]?|analyse[s]?)\s+([A-Z]{1,5})\b|\b([A-Z]{1,5})\s+(analysis|supply.?chain|risk|thesis)\b/i;
+const COMMON_WORDS = new Set(["WHAT", "WILL", "THE", "AND", "WITH", "ON", "IS", "TO", "OF", "DUE", "FOR", "HOW", "CAN", "ARE"]);
+
+function detectAnalysisTrigger(text: string): { ticker: string; query: string } | null {
+  const m = ANALYSIS_RE.exec(text);
+  if (!m) return null;
+  const ticker = (m[2] || m[3] || "").toUpperCase();
+  if (!ticker || COMMON_WORDS.has(ticker)) return null;
+  return { ticker, query: text.trim() };
+}
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  streaming?: { ticker: string; query: string };
 }
 
 const SUGGESTED_PROMPTS = [
@@ -63,6 +77,26 @@ const ChatPage: React.FC = () => {
     setMessages((prev) => [...prev, userMessage]);
     setLoading(true);
     setShowChat(true);
+
+    const analysisTrigger = detectAnalysisTrigger(content.trim());
+
+    if (analysisTrigger) {
+      // Insert a placeholder streaming message; StreamingAnalysis will populate it
+      const streamingId = `streaming-${Date.now()}`;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: streamingId,
+          role: "assistant",
+          content: "",
+          timestamp: new Date(),
+          streaming: analysisTrigger,
+        },
+      ]);
+      setLoading(false);
+      return;
+    }
+
     try {
       const response: ChatResponse = await mcpApi.chat(userMessage.content);
 
@@ -96,6 +130,26 @@ const ChatPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleStreamDone = (id: string, result: MultiAgentAnalysisData) => {
+    // Convert the streaming placeholder to a normal assistant message so the
+    // verdict persists after StreamingAnalysis unmounts.
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === id ? { ...m, streaming: undefined, content: JSON.stringify(result) } : m
+      )
+    );
+  };
+
+  const handleStreamError = (id: string, msg: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === id
+          ? { ...m, streaming: undefined, content: `Error: ${msg}` }
+          : m
+      )
+    );
   };
 
   if (!showChat) {
@@ -201,29 +255,40 @@ const ChatPage: React.FC = () => {
                   </div>
                 ) : (
                   <>
-                    <div
-                      className={`inline-block max-w-[85%] rounded-2xl p-5 text-sm leading-7 ${
-                        message.role === "user"
-                          ? "border border-[#4A70A9]/30 bg-[#4A70A9]/20 text-white"
-                          : message.content.startsWith("Error:")
-                            ? "border border-red-500/20 bg-red-500/10 text-red-100"
-                            : "border border-white/10 bg-white/5 text-neutral-200 backdrop-blur-lg"
-                      }`}
-                    >
-                      {message.role === "assistant" &&
-                      !message.content.startsWith("Error:") ? (
-                        <StructuredAnalysisMessage content={message.content} />
-                      ) : message.content.startsWith("Error:") ? (
-                        <p className="whitespace-pre-wrap">
-                          Something went wrong. Please try again.
-                        </p>
-                      ) : (
-                        <p className="whitespace-pre-wrap">{message.content}</p>
-                      )}
-                    </div>
-                    <p className="mt-2 text-xs text-neutral-500">
-                      {message.timestamp.toLocaleTimeString()}
-                    </p>
+                    {message.streaming ? (
+                      <StreamingAnalysis
+                        ticker={message.streaming.ticker}
+                        query={message.streaming.query}
+                        onDone={(result) => handleStreamDone(message.id, result)}
+                        onError={(err) => handleStreamError(message.id, err)}
+                      />
+                    ) : (
+                      <div
+                        className={`inline-block max-w-[85%] rounded-2xl p-5 text-sm leading-7 ${
+                          message.role === "user"
+                            ? "border border-[#4A70A9]/30 bg-[#4A70A9]/20 text-white"
+                            : message.content.startsWith("Error:")
+                              ? "border border-red-500/20 bg-red-500/10 text-red-100"
+                              : "border border-white/10 bg-white/5 text-neutral-200 backdrop-blur-lg"
+                        }`}
+                      >
+                        {message.role === "assistant" &&
+                        !message.content.startsWith("Error:") ? (
+                          <StructuredAnalysisMessage content={message.content} />
+                        ) : message.content.startsWith("Error:") ? (
+                          <p className="whitespace-pre-wrap">
+                            Something went wrong. Please try again.
+                          </p>
+                        ) : (
+                          <p className="whitespace-pre-wrap">{message.content}</p>
+                        )}
+                      </div>
+                    )}
+                    {!message.streaming && (
+                      <p className="mt-2 text-xs text-neutral-500">
+                        {message.timestamp.toLocaleTimeString()}
+                      </p>
+                    )}
                   </>
                 )}
               </div>

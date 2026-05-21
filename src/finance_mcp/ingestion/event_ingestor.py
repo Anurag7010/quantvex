@@ -1,28 +1,26 @@
 """
 finance_mcp.ingestion.event_ingestor
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Writes ParsedEvent objects into the NebulaGraph supply chain graph.
+Writes ParsedEvent objects into the Memgraph supply chain graph.
 
 Pipeline
 --------
 ParsedEvent
     │
     ▼  upsert_event(event_id, description, severity)
-Event vertex in NebulaGraph
+Event vertex in Memgraph
     │
-    ▼  insert_impacts(src=event_id, dst=entity_id, impact_time=...)
+    ▼  insert_impacts(event_id, entity_id, impact_time)
 IMPACTS edge → Company / Commodity vertex
 
 Design
 ------
-* Uses SecureGraphClient (Phase 2) for all graph interaction — no direct
-  nGQL strings are built here.
-* A thin private subclass _GraphWriter adds insert_impacts() without
-  touching the Phase 2 source.
-* One connection pool is opened per ingest() call and closed in a
-  finally block to guarantee cleanup.
-* Per-event failures are captured and returned in IngestResult without
-  aborting the rest of the batch.
+* Uses GraphClient for all graph interaction.
+* _GraphWriter is a thin subclass that preserves the (src, dst, impact_time)
+  call signature used internally by EventIngestor.
+* One driver instance is opened per ingest() call and closed in a finally
+  block to guarantee cleanup.
+* Per-event failures are captured in IngestResult without aborting the batch.
 """
 
 from __future__ import annotations
@@ -33,7 +31,7 @@ from dataclasses import dataclass, field
 from typing import List
 
 from finance_mcp.graph.client import (
-    SecureGraphClient,
+    GraphClient,
     DEFAULT_HOST,
     DEFAULT_PORT,
     AGENT_USER,
@@ -43,50 +41,32 @@ from finance_mcp.news.event_parser import ParsedEvent
 
 logger = logging.getLogger(__name__)
 
-# VID validation — identical pattern to SecureGraphClient._validate_vid
 _VID_RE = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
 
-# INSERT IMPACTS with Python {src}/{dst} format slots for VID literals.
-# NebulaGraph does not support $param syntax in VID position, so validated
-# VIDs are embedded as quoted literals (same pattern as INSERT_COMPANY).
-_INSERT_IMPACTS_FMT = (
-    'INSERT EDGE IF NOT EXISTS IMPACTS(impact_time) '
-    'VALUES "{src}"->"{dst}":(datetime($impact_time))'
-)
-
 
 # ---------------------------------------------------------------------------
-# Private graph writer — adds INSERT_IMPACTS edge support
+# Private graph writer — maps (src, dst) call convention to GraphClient API
 # ---------------------------------------------------------------------------
 
-class _GraphWriter(SecureGraphClient):
+class _GraphWriter(GraphClient):
     """
-    Minimal subclass of SecureGraphClient that exposes an insert_impacts()
-    method.  The query string comes from the immutable queries module
-    (satisfying the Phase 2 safety contract); all values travel through
-    the params dict to _execute() at the protocol level.
+    Thin subclass of GraphClient that provides insert_impacts() with the
+    (src, dst, impact_time) signature used by EventIngestor._ingest_one().
     """
 
-    def insert_impacts(self, src: str, dst: str, impact_time: str) -> None:
-        """
-        Insert an IMPACTS edge from an Event vertex to a Company or
-        Commodity vertex.
-
-        Parameters
-        ----------
-        src         : str — Event VID (e.g. "EVT_abc123def456")
-        dst         : str — Company or Commodity VID (e.g. "TSMC", "LITHIUM")
-        impact_time : str — ISO-8601 datetime, e.g. "2026-03-09T00:00:00"
-        """
+    def insert_impacts(self, src: str, dst: str, impact_time: str) -> None:  # type: ignore[override]
         if not _VID_RE.match(src):
             raise ValueError(f"insert_impacts: invalid src VID {src!r}")
         if not _VID_RE.match(dst):
             raise ValueError(f"insert_impacts: invalid dst VID {dst!r}")
-        # VIDs are validated above — safe to embed as quoted literals.
-        # impact_time travels through params to execute_parameter().
-        self._execute(
-            _INSERT_IMPACTS_FMT.format(src=src, dst=dst),
-            {"impact_time": impact_time},
+        self._run(
+            "MATCH (e:Event {event_id: $event_id}) "
+            "MATCH (t) WHERE "
+            "  (t:Company AND t.ticker = $target) OR "
+            "  (t:Commodity AND t.commodity_id = $target) "
+            "MERGE (e)-[r:IMPACTS]->(t) "
+            "SET r.impact_time = $impact_time",
+            event_id=src, target=dst, impact_time=impact_time,
         )
 
 
@@ -118,20 +98,13 @@ class IngestResult:
 
 class EventIngestor:
     """
-    Persists a batch of ParsedEvent objects into NebulaGraph.
+    Persists a batch of ParsedEvent objects into Memgraph.
 
     Usage::
 
-        ingestor = EventIngestor(host="127.0.0.1", port=9669)
+        ingestor = EventIngestor(host="127.0.0.1", port=7687)
         result = ingestor.ingest(parsed_events)
         print(result.succeeded, "events written")
-
-    Parameters
-    ----------
-    host     : str  NebulaGraph host  (default: "127.0.0.1")
-    port     : int  NebulaGraph port  (default: 9669)
-    user     : str  Graph user        (default: "root")
-    password : str  Graph password    (default: "nebula")
     """
 
     def __init__(
@@ -146,48 +119,10 @@ class EventIngestor:
         self._user = user
         self._password = password
 
-    # ------------------------------------------------------------------
-
     def ingest_event(self, parsed_event: ParsedEvent) -> IngestResult:
-        """
-        Write a single ParsedEvent to the graph.
-
-        Convenience wrapper around :meth:`ingest` for callers that
-        process events one at a time (e.g. a streaming consumer).
-
-        Parameters
-        ----------
-        parsed_event : ParsedEvent
-            A single event produced by EventParser.parse_news_article().
-
-        Returns
-        -------
-        IngestResult
-            ``succeeded=1`` on success; ``failed=1`` with error message
-            on failure.
-        """
         return self.ingest([parsed_event])
 
-    # ------------------------------------------------------------------
-
     def ingest(self, events: List[ParsedEvent]) -> IngestResult:
-        """
-        Write each ParsedEvent to the graph.
-
-        Opens a single connection pool for the whole batch.  Individual
-        event failures are logged and captured in IngestResult.errors
-        without aborting the remaining events.
-
-        Parameters
-        ----------
-        events : List[ParsedEvent]
-            Events produced by EventParser.parse_articles().
-
-        Returns
-        -------
-        IngestResult
-            Counts and error messages for the batch.
-        """
         result = IngestResult(total=len(events))
 
         if not events:
@@ -222,13 +157,7 @@ class EventIngestor:
         )
         return result
 
-    # ------------------------------------------------------------------
-
     def _ingest_one(self, client: _GraphWriter, event: ParsedEvent) -> None:
-        """
-        Write a single ParsedEvent: upsert the Event vertex then insert
-        one IMPACTS edge per impacted entity.
-        """
         client.upsert_event(
             event_id=event.event_id,
             description=event.description,

@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     mcp_server_host: str = "0.0.0.0"
     mcp_server_port: int = 8000
     mcp_server_name: str = "finance-mcp"
-    mcp_server_version: str = "1.0.0"
+    mcp_server_version: str = "2.0.0"
 
     default_max_age_sec: int = 60
     semantic_cache_threshold: float = 0.86
@@ -28,8 +28,12 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
-    nebula_host: str = "finance-mcp-nebula-graphd"
-    nebula_port: int = 9669
+    memgraph_host: str = Field(default="localhost", env="MEMGRAPH_HOST")
+    memgraph_port: int = Field(default=7687, env="MEMGRAPH_PORT")
+    memgraph_user: str = Field(default="", env="MEMGRAPH_USER")
+    memgraph_password: str = Field(default="", env="MEMGRAPH_PASSWORD")
+
+    verdict_db_path: str = Field(default="verdicts.db", env="VERDICT_DB_PATH")
 
     newsdata_api_key: str = Field(default="", env="NEWSDATA_API_KEY")
     news_api_key: str = Field(default="", env="NEWS_API_KEY")

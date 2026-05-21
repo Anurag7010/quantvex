@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
 from typing import Any, Dict
@@ -47,29 +46,46 @@ def _fallback_case(stance: str, error: Exception | str) -> AgentOutput:
     )
 
 
+def _generate_rebuttal(bull_case: AgentOutput, bear_case: AgentOutput) -> str:
+    """Generate a brief bull rebuttal to the bear's targeted attack (≤50 tokens)."""
+    attack_target = bear_case.metadata.get("attack_target")
+    if not attack_target:
+        return "Bull thesis stands; no specific claim was targeted."
+    if bull_case.confidence >= bear_case.confidence * 0.85:
+        return (
+            f"Bull maintains: the concern about '{attack_target}' "
+            "is acknowledged but does not invalidate the core supply-chain thesis."
+        )
+    return (
+        f"Bull concedes '{attack_target}' is less certain than stated. "
+        "The thesis relies on the remaining supporting signals."
+    )
+
+
 async def run_multi_agent_analysis(query: str, ticker: str | None = None) -> Dict[str, Any]:
-    """Run bull/bear/judge pipeline and always return a safe structured result."""
+    """Run sequential adversarial debate (bull → bear attack → bull rebuttal → judge)."""
     resolved_ticker = (ticker or "").strip().upper() or _extract_ticker(query)
     agent_input = AgentInput(query=query, ticker=resolved_ticker)
 
-    bull_task = asyncio.create_task(run_bull_agent(agent_input))
-    bear_task = asyncio.create_task(run_bear_agent(agent_input))
+    # Step 1: Bull builds thesis with weakest_claim in metadata
+    try:
+        bull_case = await run_bull_agent(agent_input)
+    except Exception as exc:
+        logger.error("bull_agent_failed", exc_info=exc)
+        bull_case = _fallback_case("bull", exc)
 
-    bull_raw, bear_raw = await asyncio.gather(bull_task, bear_task, return_exceptions=True)
+    # Step 2: Bear attacks bull's weakest claim specifically
+    try:
+        bear_case = await run_bear_agent(agent_input, bull_thesis=bull_case)
+    except Exception as exc:
+        logger.error("bear_agent_failed", exc_info=exc)
+        bear_case = _fallback_case("bear", exc)
 
-    if isinstance(bull_raw, Exception):
-        logger.error("bull_agent_failed", exc_info=bull_raw)
-        bull_case = _fallback_case("bull", bull_raw)
-    else:
-        bull_case = bull_raw
+    # Step 3: Bull rebuttal (brief; maintains or concedes weakest claim)
+    bull_rebuttal = _generate_rebuttal(bull_case, bear_case)
 
-    if isinstance(bear_raw, Exception):
-        logger.error("bear_agent_failed", exc_info=bear_raw)
-        bear_case = _fallback_case("bear", bear_raw)
-    else:
-        bear_case = bear_raw
-
-    judge = run_judge_agent(bull_case, bear_case)
+    # Step 4: Judge evaluates full transcript
+    judge = run_judge_agent(bull_case, bear_case, bull_rebuttal=bull_rebuttal)
 
     return {
         "query": query,
@@ -78,12 +94,15 @@ async def run_multi_agent_analysis(query: str, ticker: str | None = None) -> Dic
             "reasoning": bull_case.reasoning,
             "signals": bull_case.signals,
             "confidence": bull_case.confidence,
+            "weakest_claim": bull_case.metadata.get("weakest_claim"),
         },
         "bear_case": {
             "reasoning": bear_case.reasoning,
             "signals": bear_case.signals,
             "confidence": bear_case.confidence,
+            "attack_target": bear_case.metadata.get("attack_target"),
         },
+        "bull_rebuttal": bull_rebuttal,
         "judge_verdict": judge.model_dump(),
         "final_verdict": judge.verdict,
         "verdict": judge.verdict,

@@ -1,7 +1,7 @@
 """
 Unit tests for EventIngestor.
 
-All tests run without a live NebulaGraph by patching _GraphWriter.
+All tests run without a live Memgraph by patching _GraphWriter.
 """
 
 from __future__ import annotations
@@ -342,22 +342,22 @@ class TestIngestEvent:
 # ---------------------------------------------------------------------------
 
 class TestGraphWriter:
-    def test_is_subclass_of_secure_graph_client(self):
-        from finance_mcp.graph.client import SecureGraphClient
-        assert issubclass(_GraphWriter, SecureGraphClient)
+    def test_is_subclass_of_graph_client(self):
+        from finance_mcp.graph.client import GraphClient
+        assert issubclass(_GraphWriter, GraphClient)
 
     def test_has_insert_impacts_method(self):
         assert callable(getattr(_GraphWriter, "insert_impacts", None))
 
 
 # ---------------------------------------------------------------------------
-# Integration smoke test (requires live NebulaGraph)
+# Integration smoke test (requires live Memgraph)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.integration
 def test_ingest_live_event():
-    """Writes one event + one IMPACTS edge to NebulaGraph and verifies."""
-    from finance_mcp.graph.client import SecureGraphClient
+    """Writes one event + one IMPACTS edge to Memgraph and verifies."""
+    from finance_mcp.graph.client import GraphClient
 
     event = _make_event(
         event_id="EVT_integtest0001",
@@ -374,6 +374,11 @@ def test_ingest_live_event():
     assert result.succeeded == 1, f"Ingest failed: {result.errors}"
 
     # Verify the event vertex was written
-    with SecureGraphClient() as client:
-        rs = client.fetch_event("EVT_integtest0001")
-        assert not rs.is_empty(), "Expect Event vertex to exist after ingest"
+    with GraphClient() as client:
+        ev = client.fetch_event("EVT_integtest0001")
+        assert ev, "Expect Event vertex to exist after ingest"
+        # Cleanup
+        client._run(
+            "MATCH (e:Event {event_id: $id}) DETACH DELETE e",
+            id="EVT_integtest0001",
+        )

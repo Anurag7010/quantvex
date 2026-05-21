@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from typing import Optional
 
 from finance_mcp.reasoning.schemas import AgentOutput, JudgeVerdict
 
@@ -75,19 +76,43 @@ def _sanitize_summary(summary: str) -> str:
     return sanitized
 
 
+_SIGNAL_SKIP = frozenset({"unavailable", "returned 0", "graph may", "graph unreachable", "targeting bull"})
+
+
+def _pick_lead_signal(signals: list[str], analysis: str, sentiment: str) -> str:
+    """Return the most informative signal, skipping infrastructure noise."""
+    for s in signals:
+        lower = s.lower()
+        if not any(kw in lower for kw in _SIGNAL_SKIP):
+            return s
+    return _extract_top_3(analysis, [], sentiment)[0]
+
+
 def _generate_summary(
     verdict: str,
     conviction: str,
     bull_analysis: str,
     bear_analysis: str,
+    bull_rebuttal: Optional[str] = None,
+    attack_target: Optional[str] = None,
+    bull_signals: Optional[list[str]] = None,
+    bear_signals: Optional[list[str]] = None,
 ) -> str:
     """Generate a decisive, specific three-sentence verdict summary."""
-    bull_reason = _extract_top_3(bull_analysis, [], "positive")[0]
-    bear_risk = _extract_top_3(bear_analysis, [], "negative")[0]
+    bull_reason = _pick_lead_signal(bull_signals or [], bull_analysis, "positive")
+    bear_risk = _pick_lead_signal(bear_signals or [], bear_analysis, "negative")
+
+    debate_note = ""
+    if attack_target:
+        debate_note = f" Bear challenged '{attack_target}'."
+        if bull_rebuttal:
+            debate_note += f" {bull_rebuttal}"
+
     summary = (
-        f"{verdict} with {conviction} conviction because {bull_reason}. "
-        f"The primary invalidation risk is {bear_risk}. "
-        "The thesis horizon is 3-6 months."
+        f"{verdict} with {conviction} conviction. Key bull signal: {bull_reason}. "
+        f"Key bear risk: {bear_risk}."
+        f"{debate_note} "
+        "Thesis horizon: 3-6 months."
     )
     return _sanitize_summary(summary)
 
@@ -114,6 +139,8 @@ def _compute_verdict(
     bear_analysis: str,
     bull_signals: list[str] | None = None,
     bear_signals: list[str] | None = None,
+    bull_rebuttal: Optional[str] = None,
+    attack_target: Optional[str] = None,
 ) -> JudgeVerdict:
     bull_confidence = _as_percent(bull_confidence)
     bear_confidence = _as_percent(bear_confidence)
@@ -145,7 +172,11 @@ def _compute_verdict(
         bear_confidence=bear_confidence,
         confidence_gap=round(gap, 1),
         composite_confidence=min(composite_confidence, 95.0),
-        summary=_generate_summary(verdict, conviction, bull_analysis, bear_analysis),
+        summary=_generate_summary(
+            verdict, conviction, bull_analysis, bear_analysis,
+            bull_rebuttal=bull_rebuttal, attack_target=attack_target,
+            bull_signals=bull_signals, bear_signals=bear_signals,
+        ),
         key_drivers=_extract_key_drivers(
             bull_analysis=bull_analysis,
             bear_analysis=bear_analysis,
@@ -156,8 +187,12 @@ def _compute_verdict(
     )
 
 
-def run_judge_agent(bull_case: AgentOutput, bear_case: AgentOutput) -> JudgeVerdict:
-    """Synthesize bull/bear outputs into a decisive final verdict."""
+def run_judge_agent(
+    bull_case: AgentOutput,
+    bear_case: AgentOutput,
+    bull_rebuttal: Optional[str] = None,
+) -> JudgeVerdict:
+    """Synthesize full debate transcript into a decisive final verdict."""
     return _compute_verdict(
         bull_confidence=bull_case.confidence,
         bear_confidence=bear_case.confidence,
@@ -165,4 +200,6 @@ def run_judge_agent(bull_case: AgentOutput, bear_case: AgentOutput) -> JudgeVerd
         bear_analysis=bear_case.reasoning,
         bull_signals=bull_case.signals,
         bear_signals=bear_case.signals,
+        bull_rebuttal=bull_rebuttal,
+        attack_target=bear_case.metadata.get("attack_target"),
     )

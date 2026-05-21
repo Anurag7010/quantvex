@@ -48,8 +48,8 @@ npm run build    # production build
 # Start Redis, Qdrant, Neo4j (and the MCP server container)
 cd infra && docker-compose up -d
 
-# Start NebulaGraph cluster (required for supply chain graph)
-cd docker && docker-compose -f nebula-docker-compose.yml up -d
+# Start Memgraph (required for supply chain graph)
+cd docker && docker-compose -f memgraph-docker-compose.yml up -d
 
 # Seed the supply chain graph (57 companies, 20 commodities, 100+ edges)
 python scripts/seed_production_data.py
@@ -73,7 +73,7 @@ React frontend  →  POST /chat or /invoke  →  FastAPI (mcp_server/server.py)
                    calling loop)                   ↓
                         └──────────────────→ services + connectors
                                                    ↓
-                                     NebulaGraph / Redis / Qdrant / Neo4j
+                                     Memgraph / Redis / Qdrant
 ```
 
 ### Key Modules
@@ -82,14 +82,16 @@ React frontend  →  POST /chat or /invoke  →  FastAPI (mcp_server/server.py)
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `mcp_server/server.py`             | All HTTP endpoints; auth (`X-API-Key`), rate limiting, CORS                                                     |
 | `mcp_server/chat_agent.py`         | GPT-4o agent with finance domain guardrails and 20-turn history                                                 |
-| `mcp_server/capabilities.json`     | MCP tool catalog (schema definitions for all five tools)                                                        |
-| `mcp_server/config.py`             | All settings via `pydantic_settings`; loaded from `.env`                                                        |
-| `mcp_server/invoke_handlers/`      | One file per MCP tool (`quote_latest`, `quote_stream`, `trace_impact`, `news_analysis`, `multi_agent_analysis`) |
-| `src/finance_mcp/graph/client.py`  | `SecureGraphClient` — parameterised NebulaGraph queries, injection-safe                                         |
-| `src/finance_mcp/graph/queries.py` | Immutable nGQL templates (never build query strings inline)                                                     |
-| `src/finance_mcp/reasoning/`       | `bull_agent.py`, `bear_agent.py`, `judge_agent.py`, `orchestrator.py` — concurrent execution via asyncio        |
-| `src/finance_mcp/news/`            | NewsData.io adapter + rule-based disruption event parser                                                        |
-| `src/finance_mcp/ingestion/`       | Writes Event vertices + `IMPACTS` edges into NebulaGraph                                                        |
+| `mcp_server/capabilities.json`     | MCP tool catalog (schema definitions for all six tools)                                                          |
+| `mcp_server/config.py`             | All settings via `pydantic_settings`; loaded from `.env`                                                         |
+| `mcp_server/invoke_handlers/`      | One file per MCP tool (`quote_latest`, `quote_stream`, `trace_impact`, `news_analysis`, `multi_agent_analysis`, `edgar_refresh`, `stream_analysis`) |
+| `src/finance_mcp/graph/client.py`  | `GraphClient` — parameterised Cypher over Bolt (Memgraph), injection-safe, connection-pooled                     |
+| `src/finance_mcp/edgar/`           | EDGAR HTTP client, GPT-4o supplier extractor, graph updater                                                      |
+| `src/finance_mcp/causal/`          | OLS causal beta calibration on DEPENDS_ON edges (yfinance + scipy)                                               |
+| `src/finance_mcp/verdict_history/` | SQLite verdict store + async 5d/30d accuracy tracking                                                            |
+| `src/finance_mcp/reasoning/`       | `bull_agent.py`, `bear_agent.py`, `judge_agent.py`, `orchestrator.py` — concurrent execution via asyncio         |
+| `src/finance_mcp/news/`            | NewsData.io adapter + rule-based disruption event parser                                                         |
+| `src/finance_mcp/ingestion/`       | Writes Event vertices + `IMPACTS` edges into Memgraph                                                            |
 | `connectors/`                      | Market data adapters: Finnhub (primary), Alpha Vantage (fallback), Binance WebSocket                            |
 | `cache/redis_client.py`            | Hot quote snapshot cache                                                                                        |
 | `cache/qdrant_client.py`           | Semantic cache (sentence-transformers, threshold 0.86)                                                          |
@@ -103,9 +105,9 @@ Quote requests follow: **Qdrant semantic cache → Redis snapshot → Finnhub RE
 
 `orchestrator.py` runs bull and bear agents concurrently with `asyncio.gather`. Each agent calls the same live tools (quote, trace_impact, news). `judge_agent.py` compares confidence scores to emit one of: `STRONG BUY / BUY / HOLD / SELL / STRONG SELL / INSUFFICIENT DATA`.
 
-### NebulaGraph Schema
+### Graph Schema (Memgraph)
 
-Three vertex types (`Company`, `Commodity`, `Event`) and three edge types (`DEPENDS_ON`, `REQUIRES`, `IMPACTS`). Space is named `supply_chain`. Runtime user is `mcp_agent` (INSERT/UPDATE/DELETE + traversal only — no schema DDL).
+Three vertex types (`Company`, `Commodity`, `Event`) and three edge types (`DEPENDS_ON`, `REQUIRES`, `IMPACTS`). All queries use parameterised Cypher via the neo4j Bolt driver.
 
 ## Adding a New MCP Tool
 
@@ -118,10 +120,9 @@ Three vertex types (`Company`, `Commodity`, `Event`) and three edge types (`DEPE
 
 ## Key Invariants
 
-- All NebulaGraph queries must go through `SecureGraphClient._execute()` with parameter binding — never string-interpolate nGQL.
-- Graph query templates live only in `src/finance_mcp/graph/queries.py`.
+- All Memgraph queries must go through `GraphClient._run()` with parameter binding — never string-interpolate Cypher.
 - The `X-API-Key` header is required on every endpoint except `/health` and `/.well-known/mcp`.
-- Rate limit is 60 requests / 60-second window per key (enforced in-memory in `server.py`).
+- Rate limit is 60 requests / 60-second window per API key (enforced in-memory in `server.py`).
 - `ALLOWED_ORIGINS` must be set explicitly in production — the server does not allow wildcards.
 - The `NEWSDATA_API_KEY` env var is the active news key; `NEWS_API_KEY` is a legacy alias also accepted.
-- Neo4j has been removed entirely — do not re-add it. The `graph/` directory now only contains an empty `__init__.py`.
+- `src/finance_mcp/graph/queries.py` and `schema.py` have been removed — all Cypher is inline in `client.py` methods.

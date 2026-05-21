@@ -12,6 +12,7 @@ from mcp_server.config import get_settings
 from mcp_server.invoke_handlers import handle_quote_latest, handle_trace_impact
 from mcp_server.invoke_handlers.multi_agent_analysis import handle_multi_agent_analysis
 from mcp_server.invoke_handlers.news_analysis import handle_news_analysis
+from mcp_server.invoke_handlers.edgar_refresh import handle_edgar_refresh
 from mcp_server.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -43,6 +44,9 @@ _FINANCE_TERMS = frozenset(
         "index", "indices", "nifty", "sensex", "nasdaq", "s&p", "dow",
         "ipo", "dividend", "interest rate", "yield", "spread",
         "what happened", "which companies", "how much", "why did",
+        # EDGAR / filings
+        "edgar", "sec", "10-k", "10k", "filing", "filings", "refresh",
+        "supplier", "suppliers", "customer", "customers", "annual report",
     }
 )
 
@@ -200,6 +204,34 @@ class QuantVexChatAgent:
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "edgar_refresh",
+                    "description": (
+                        "Fetch the most recent 10-K filing from SEC EDGAR for a US-listed company, "
+                        "extract named supplier and customer relationships using AI, and update the "
+                        "supply chain graph with real filing data. Call this when the user asks to "
+                        "update the graph with real data, refresh supply chain relationships, or "
+                        "wants to know what a company's 10-K says about its suppliers/customers. "
+                        "Only works for SEC-registered (US-listed) companies — not TSMC, Samsung, ASML etc."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "ticker": {
+                                "type": "string",
+                                "description": (
+                                    "Uppercase stock ticker of the company whose 10-K to process. "
+                                    "Must be SEC-registered (US-listed). Examples: AAPL, NVDA, MSFT, QCOM."
+                                ),
+                            },
+                        },
+                        "required": ["ticker"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
         ]
 
     def _build_system_prompt(self) -> str:
@@ -222,7 +254,10 @@ Questions about current price, market cap, P/E ratio, volume, 52-week range → 
 RULE 4 — INVESTMENT THESIS / RECOMMENDATION:
 Explicit requests for a full analysis, buy/sell/hold verdict, investment thesis, or outlook → call `multi_agent_analysis`.
 
-RULE 5 — COMBINING TOOLS:
+RULE 5 — EDGAR / SEC FILINGS:
+Any request to refresh supplier data, update the supply chain graph from real filings, or find out what a company's 10-K says about suppliers, customers, or key vendors → call `edgar_refresh` with the company ticker. This is a finance intelligence operation — always route it, never refuse it.
+
+RULE 6 — COMBINING TOOLS:
 - News + supply chain context: call `analyze_news_impact` then `trace_supply_chain_impact`
 - News + investment decision: call `analyze_news_impact` then `multi_agent_analysis`
 - Company question with news angle: call both `trace_supply_chain_impact` and `analyze_news_impact`
@@ -323,6 +358,14 @@ RULE 5 — COMBINING TOOLS:
                 )
                 return result.model_dump() if hasattr(result, "model_dump") else dict(result)
 
+            if tool_name == "edgar_refresh":
+                ticker = str(args.get("ticker", "")).strip().upper()
+                result = await handle_edgar_refresh(
+                    ticker=ticker,
+                    agent_id="quantvex_chat_agent",
+                )
+                return result.model_dump() if hasattr(result, "model_dump") else dict(result)
+
             return {"success": False, "error": f"Unknown tool: {tool_name}"}
 
         except Exception as exc:  # noqa: BLE001
@@ -416,7 +459,7 @@ RULE 5 — COMBINING TOOLS:
         return text
 
 
-GPTChatAgent = QuantVexChatAgent
+GPTChatAgent = QuantVexChatAgent  # kept for scripts/verify_system.py
 
 _chat_agent: Optional[QuantVexChatAgent] = None
 
@@ -427,8 +470,3 @@ def get_chat_agent() -> QuantVexChatAgent:
     if _chat_agent is None:
         _chat_agent = QuantVexChatAgent()
     return _chat_agent
-
-
-def get_gpt_chat_agent() -> QuantVexChatAgent:
-    """Backward-compatible accessor for older imports."""
-    return get_chat_agent()

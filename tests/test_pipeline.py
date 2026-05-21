@@ -207,12 +207,12 @@ class TestPipelineHappyPath:
     @patch("finance_mcp.ingestion.pipeline.EventIngestor")
     @patch("finance_mcp.ingestion.pipeline.EventParser")
     @patch("finance_mcp.ingestion.pipeline.NewsClient")
-    async def test_ingestor_constructed_with_nebula_params(self, MockNews, MockParser, MockIngestor, _articles, _events):
+    async def test_ingestor_constructed_with_memgraph_params(self, MockNews, MockParser, MockIngestor, _articles, _events):
         MockNews.return_value.fetch_market_news = AsyncMock(return_value=_articles)
         MockParser.return_value.parse_articles.return_value = _events
         MockIngestor.return_value.ingest.return_value = IngestResult()
 
-        await run_news_ingestion_pipeline("semiconductor", nebula_host="10.0.0.1", nebula_port=9999)
+        await run_news_ingestion_pipeline("semiconductor", memgraph_host="10.0.0.1", memgraph_port=9999)
         MockIngestor.assert_called_once_with(host="10.0.0.1", port=9999)
 
 

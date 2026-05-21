@@ -17,8 +17,15 @@ redis==5.0.1
 # Qdrant Vector DB
 qdrant-client==1.7.0
 
-# NebulaGraph (supply-chain graph)
-nebula3-python>=3.4.0
+# Memgraph / Neo4j driver (supply-chain graph, Bolt protocol)
+neo4j>=5.14.0
+
+# Price history for causal beta calibration (Phase 1.3)
+yfinance>=0.2.40
+
+# Causal analysis
+statsmodels>=0.14.0
+scipy>=1.12.0
 
 # Sentence Transformers for embeddings (pinned compatible versions)
 sentence-transformers==2.7.0
