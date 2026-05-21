@@ -17,6 +17,7 @@ class AgentOutput(BaseModel):
     reasoning: str
     signals: List[str] = Field(default_factory=list)
     confidence: float
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class JudgeVerdict(BaseModel):

@@ -6,7 +6,7 @@ Real-time pipeline:
   1. Fetch live news from NewsAPI using the caller's query
   2. Parse each article for disruption signals and affected entities
      (companies named in headlines AND commodities like crude oil, semiconductors)
-  3. Write parsed events to NebulaGraph (IMPACTS edges)
+  3. Write parsed events to Memgraph (IMPACTS edges)
   4. For every company entity found → trace downstream DEPENDS_ON cascade
   5. For every commodity entity found → look up which companies REQUIRE it,
      then trace downstream cascade from those companies
@@ -15,8 +15,8 @@ Real-time pipeline:
 
 Security
 --------
-* All graph writes and reads go through SecureGraphClient which enforces
-  parameterised nGQL and VID validation — no injection surface.
+* All graph writes and reads go through GraphClient which enforces
+  parameterised Cypher and VID validation — no injection surface.
 * The news query string is passed only to the NewsAPI ``q`` param (never
   interpolated into nGQL).
 * Results are validated before being returned to the LLM.
@@ -29,7 +29,7 @@ from typing import Dict, List, Optional
 from mcp_server.config import get_settings
 from mcp_server.schemas import ToolResponse
 from mcp_server.utils.logging import get_logger
-from finance_mcp.graph.client import SecureGraphClient
+from finance_mcp.graph.client import GraphClient
 from finance_mcp.ingestion.pipeline import run_news_ingestion_pipeline
 
 logger = get_logger(__name__)
@@ -124,8 +124,8 @@ async def handle_news_analysis(
         pipeline_result = await run_news_ingestion_pipeline(
             query=query,
             limit=limit,
-            nebula_host=settings.nebula_host,
-            nebula_port=settings.nebula_port,
+            memgraph_host=settings.memgraph_host,
+            memgraph_port=settings.memgraph_port,
         )
     except RuntimeError as exc:
         # Surface real errors (bad API key, rate limit, etc.) with agent_note
@@ -211,7 +211,7 @@ async def handle_news_analysis(
     # the centre of the disruption, always include it — even if the news NER
     # missed it or the pipeline failed entirely.
     # Commodity VIDs go into commodity_entities and are traced directly;
-    # SecureGraphClient.trace_impact handles Commodity -> REQUIRES cascades.
+    # GraphClient.trace_impact handles Commodity -> REQUIRES cascades.
     # ------------------------------------------------------------------
     _KNOWN_COMMODITY_VIDS = frozenset({
         "CRUDE_OIL", "NATURAL_GAS", "COAL", "SEMICONDUCTOR_WAFER",
@@ -271,9 +271,9 @@ async def handle_news_analysis(
 
     if company_entities or commodity_entities:
         try:
-            with SecureGraphClient(
-                host=settings.nebula_host,
-                port=settings.nebula_port,
+            with GraphClient(
+                host=settings.memgraph_host,
+                port=settings.memgraph_port,
             ) as client:
                 # Directly named companies → trace downstream dependents
                 for ticker in company_entities:

@@ -1,1 +1,1 @@
-"""Phase 2 graph package for NebulaGraph integration."""
+"""Supply chain graph package — Memgraph/Bolt via neo4j driver."""

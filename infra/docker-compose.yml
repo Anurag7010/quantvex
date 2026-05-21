@@ -44,8 +44,8 @@ services:
     env_file:
       - ../.env
     environment:
-      - NEBULA_HOST=finance-mcp-nebula-graphd
-      - NEBULA_PORT=9669
+      - MEMGRAPH_HOST=finance-mcp-memgraph
+      - MEMGRAPH_PORT=7687
     depends_on:
       redis:
         condition: service_healthy
@@ -53,7 +53,6 @@ services:
         condition: service_healthy
     networks:
       - finance-mcp-net
-      - nebula-net
     restart: unless-stopped
 
 volumes:
@@ -62,5 +61,3 @@ volumes:
 
 networks:
   finance-mcp-net:
-  nebula-net:
-    driver: bridge

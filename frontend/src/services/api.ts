@@ -95,6 +95,24 @@ export interface MultiAgentAnalysisData {
   };
 }
 
+export type SSEStepName =
+  | "init"
+  | "quote_fetch"
+  | "graph_trace"
+  | "news_fetch"
+  | "bull_thesis"
+  | "bear_attack"
+  | "rebuttal"
+  | "judge"
+  | "verdict"
+  | "done";
+
+export interface SSEStep {
+  step: SSEStepName;
+  message?: string;
+  data?: Record<string, unknown>;
+}
+
 export interface MultiAgentAnalysisResponse {
   success: boolean;
   data: MultiAgentAnalysisData | null;
@@ -182,6 +200,25 @@ class MCPApi {
       query_text: query,
     });
     return response.data;
+  }
+
+  streamAnalysis(ticker: string, query: string, onStep: (step: SSEStep) => void): EventSource {
+    const params = new URLSearchParams({
+      ticker: ticker.toUpperCase(),
+      query,
+      api_key: API_KEY,
+    });
+    const url = `${this.baseUrl}/stream/analysis?${params.toString()}`;
+    const es = new EventSource(url);
+    es.onmessage = (event) => {
+      try {
+        const step: SSEStep = JSON.parse(event.data);
+        onStep(step);
+      } catch {
+        // malformed SSE line — ignore
+      }
+    };
+    return es;
   }
 
   async getMarketIndices(): Promise<{

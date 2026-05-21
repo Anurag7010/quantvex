@@ -18,12 +18,42 @@ _NEWS_KEYWORDS = (
     "crisis",
     "hike",
     "geopolitical",
+    "risk",
+    "supply",
+    "chain",
+    "tariff",
+    "recession",
 )
 
 
 def _should_run_news(query: str) -> bool:
     query_l = query.lower()
     return any(keyword in query_l for keyword in _NEWS_KEYWORDS)
+
+
+_QUANTITATIVE_MARKERS = ("quote is", "graph shows", "returned 0", "unavailable", "upstream")
+_SPECULATIVE_MARKERS = ("selective", "advantaged", "potential", "could", "may ", "rotation", "demand")
+
+
+def _identify_weakest_claim(signals: List[str], confidence: float) -> str:
+    """Return the most contestable claim for the bear agent to target."""
+    if not signals or confidence < 0.5:
+        return "Core upside thesis is weakly supported by available data."
+
+    # Prefer speculative/narrative signals as the weakest (most contestable)
+    for sig in signals:
+        lower = sig.lower()
+        if any(m in lower for m in _SPECULATIVE_MARKERS):
+            return sig
+
+    # Fall back to last non-quantitative signal (most marginal, least supported)
+    for sig in reversed(signals):
+        lower = sig.lower()
+        if not any(m in lower for m in _QUANTITATIVE_MARKERS):
+            return sig
+
+    # Last resort: last signal
+    return signals[-1]
 
 
 async def run_bull_agent(agent_input: AgentInput) -> AgentOutput:
@@ -57,8 +87,13 @@ async def run_bull_agent(agent_input: AgentInput) -> AgentOutput:
                         f"Graph shows {impacted} downstream dependents, indicating strategic supply importance."
                     )
                     confidence += 0.12
+                else:
+                    signals.append(
+                        f"Supply chain graph returned 0 dependents for {ticker} — graph may not yet be seeded for this ticker."
+                    )
         except Exception as exc:  # noqa: BLE001
             logger.warning("bull_agent trace_impact failed: %s", exc)
+            signals.append(f"Supply chain graph unavailable ({type(exc).__name__}); graph-based signals excluded.")
 
     if _should_run_news(agent_input.query):
         try:
@@ -87,14 +122,16 @@ async def run_bull_agent(agent_input: AgentInput) -> AgentOutput:
     if not signals:
         signals.append("Limited hard signals available; upside case is currently weakly supported.")
 
-    reasoning = (
-        "Bull thesis focuses on potential pricing power, demand rotation, and supplier advantage. "
-        + " ".join(signals)
-    )
+    confidence = max(0.0, min(confidence, 0.95))
+    weakest_claim = _identify_weakest_claim(signals, confidence)
+
+    label = f"Bull case for {ticker}" if ticker else "Bull case"
+    reasoning = f"{label}: " + " ".join(signals)
 
     return AgentOutput(
         stance="bull",
         reasoning=reasoning,
         signals=signals,
-        confidence=max(0.0, min(confidence, 0.95)),
+        confidence=confidence,
+        metadata={"weakest_claim": weakest_claim},
     )

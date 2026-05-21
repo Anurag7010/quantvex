@@ -2,48 +2,37 @@
 Global pytest configuration for the QuantVex test suite.
 
 Provides:
-- nebula_reachable(): probe whether a live NebulaGraph is available.
+- memgraph_reachable(): probe whether Memgraph is accepting Bolt connections.
 - Auto-skip logic for @pytest.mark.integration tests.
-- Shared skip marker for NebulaGraph-dependent tests.
 """
 from __future__ import annotations
 
+import socket
 import pytest
 
 
-def _nebula_reachable() -> bool:
-    """Return True only when NebulaGraph graphd is accepting connections."""
+def _memgraph_reachable() -> bool:
+    """Return True only when Memgraph is accepting Bolt connections on port 7687."""
     try:
-        from nebula3.gclient.net import ConnectionPool
-        from nebula3.Config import Config
-
-        cfg = Config()
-        cfg.max_connection_pool_size = 1
-        pool = ConnectionPool()
-        ok = pool.init([("127.0.0.1", 9669)], cfg)
-        try:
-            pool.close()
-        except Exception:
-            pass
-        return bool(ok)
-    except Exception:
+        with socket.create_connection(("127.0.0.1", 7687), timeout=2):
+            return True
+    except OSError:
         return False
 
 
-# Compute once at collection time
-_NEBULA_UP = _nebula_reachable()
+_MEMGRAPH_UP = _memgraph_reachable()
 
 
 def pytest_collection_modifyitems(config, items):
     """
     Automatically skip any test marked @pytest.mark.integration when
-    NebulaGraph is not reachable, instead of erroring during fixture setup.
+    Memgraph is not reachable, instead of erroring during fixture setup.
     """
-    if _NEBULA_UP:
-        return  # Nothing to do — graph is available
+    if _MEMGRAPH_UP:
+        return
 
     skip_no_graph = pytest.mark.skip(
-        reason="NebulaGraph not reachable — start docker/nebula-docker-compose.yml"
+        reason="Memgraph not reachable — start docker/memgraph-docker-compose.yml"
     )
     for item in items:
         if "integration" in item.keywords:

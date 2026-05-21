@@ -104,7 +104,10 @@
                             "properties": {
                                 "ticker": {"type": "string"},
                                 "name": {"type": "string"},
-                                "sector": {"type": "string"}
+                                "sector": {"type": "string"},
+                                "beta": {"type": ["number", "null"]},
+                                "lag_days": {"type": ["integer", "null"]},
+                                "r_squared": {"type": ["number", "null"]}
                             }
                         }
                     },
@@ -192,6 +195,33 @@
                     "key_drivers": {"type": "object"},
                     "time_horizon": {"type": "string"},
                     "generated_at": {"type": "string"}
+                }
+            }
+        }
+        ,
+        {
+            "name": "edgar_refresh",
+            "description": "Fetch the most recent 10-K filing from SEC EDGAR for a given ticker, extract named supplier and customer relationships using GPT-4o, and write them to the supply chain graph as DEPENDS_ON edges. Use this to keep the graph current with real filing data. Only works for SEC-registered (predominantly US-listed) companies.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "ticker": {
+                        "type": "string",
+                        "description": "Uppercase stock ticker symbol of the company whose 10-K to process. Must be SEC-registered (US-listed). E.g. AAPL, NVDA, MSFT."
+                    }
+                },
+                "required": ["ticker"]
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "ticker":               {"type": "string"},
+                    "filing_date":          {"type": "string"},
+                    "relationships_found":  {"type": "integer"},
+                    "new_edges_added":      {"type": "integer"},
+                    "updated_edges":        {"type": "integer"},
+                    "companies_discovered": {"type": "integer"},
+                    "errors":               {"type": "array", "items": {"type": "string"}}
                 }
             }
         }

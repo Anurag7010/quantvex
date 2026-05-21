@@ -2,15 +2,13 @@
 Trace Impact Tool Handler
 MCP tool: trace_impact
 
-Exposes SecureGraphClient.trace_impact() — the Phase 2 causal reasoning
-engine — as an MCP-callable tool.
+Exposes GraphClient.trace_impact() — the supply-chain causal reasoning engine
+— as an MCP-callable tool.
 
-Security model (inherited from Phase 2):
-  • No raw nGQL is generated here.
-  • All graph access is delegated to SecureGraphClient, which uses
-    parameterised execute_parameter() calls and VID injection guards.
-  • The handler authenticates as mcp_agent (USER role) — it cannot
-    DROP spaces, ALTER schema, or create users.
+Security model:
+  • No raw Cypher is generated here.
+  • All graph access is delegated to GraphClient, which uses parameterised
+    Cypher queries and VID injection guards.
 """
 import re
 import time
@@ -19,7 +17,7 @@ from typing import Optional
 from mcp_server.utils.logging import get_logger
 from mcp_server.schemas import ToolResponse
 from mcp_server.config import get_settings
-from finance_mcp.graph.client import SecureGraphClient
+from finance_mcp.graph.client import GraphClient
 
 logger = get_logger(__name__)
 
@@ -27,7 +25,7 @@ logger = get_logger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-# VID-compatible ticker pattern — mirrors _VID_RE in SecureGraphClient.
+# VID-compatible ticker pattern — mirrors _VID_RE in GraphClient.
 # Must be kept in sync with client.py if that pattern ever changes.
 _TICKER_RE = re.compile(r'^[A-Za-z0-9_.\-]{1,64}$')
 
@@ -55,7 +53,7 @@ async def handle_trace_impact(
     ----
     1. Validate ``ticker`` — must be non-empty, VID-safe characters only.
     2. Validate ``max_hops`` — must be an integer in [1, 5].
-    3. Open a SecureGraphClient connection (reads host/port from settings).
+    3. Open a GraphClient connection (reads host/port from settings).
     4. Call ``client.trace_impact(target_ticker, max_hops)``.
     5. Return a structured ToolResponse containing the impacted companies.
 
@@ -79,7 +77,14 @@ async def handle_trace_impact(
                 "ticker": str,
                 "max_hops": int,
                 "impacted_companies": [
-                    {"ticker": str, "name": str, "sector": str},
+                    {
+                        "ticker": str,
+                        "name": str,
+                        "sector": str,
+                        "beta": float | None,      # causal price-impact coefficient
+                        "lag_days": int | None,    # trading-day lag at peak R²
+                        "r_squared": float | None, # OLS model fit (None until calibrated)
+                    },
                     ...
                 ],
                 "impacted_count": int
@@ -139,9 +144,9 @@ async def handle_trace_impact(
     # Step 3 — Call graph reasoning engine
     # -----------------------------------------------------------------------
     try:
-        with SecureGraphClient(
-            host=settings.nebula_host,
-            port=settings.nebula_port,
+        with GraphClient(
+            host=settings.memgraph_host,
+            port=settings.memgraph_port,
         ) as client:
             impacted = client.trace_impact(
                 target_ticker=ticker,
@@ -149,7 +154,7 @@ async def handle_trace_impact(
             )
 
     except ValueError as exc:
-        # Validation errors from SecureGraphClient (e.g. VID regex failure)
+        # Validation errors from GraphClient (e.g. VID regex failure)
         logger.warning("trace_impact_validation_error", error=str(exc))
         return ToolResponse(success=False, error=str(exc))
 

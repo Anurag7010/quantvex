@@ -2,17 +2,17 @@
 """
 e2e_pipeline.py
 ~~~~~~~~~~~~~~~
-Full Phase 3 end-to-end validation script.
+QuantVex end-to-end validation script.
 
 Steps
 -----
-1.  Run full pipeline: NewsClient → EventParser → EventIngestor → NebulaGraph
+1.  Run full pipeline: NewsClient → EventParser → EventIngestor → Memgraph
 2.  Verify written events appear in graph via fetch_event()
 3.  Run trace_impact() to test causal reasoning with ingested graph state
 4.  Prove full architecture: headline → graph → AI-ready reasoning output
 
 Run:
-    PYTHONPATH=src:. python tests/e2e_pipeline.py
+    PYTHONPATH=src:. python scripts/e2e_pipeline.py
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ import sys
 sys.path.insert(0, "src")
 sys.path.insert(0, ".")  # ensure mcp_server package is importable
 
-from finance_mcp.graph.client import SecureGraphClient
+from finance_mcp.graph.client import GraphClient
 from finance_mcp.ingestion.pipeline import run_news_ingestion_pipeline
 from finance_mcp.news.event_parser import EventParser
 from finance_mcp.news.news_client import NewsClient
@@ -100,7 +100,7 @@ async def step1_pipeline() -> None:
 # ── Step 2 — verify written vertices ─────────────────────────────────────────
 
 def step2_verify_graph(result) -> None:
-    section("Step 2 — Verify Event Vertices in NebulaGraph")
+    section("Step 2 — Verify Event Vertices in Memgraph")
 
     if not result.parsed_events:
         print(f"  {INFO}  No events were parsed — skipping graph verification")
@@ -116,20 +116,17 @@ def step2_verify_graph(result) -> None:
     sample = written[0]
     print(f"  {INFO}  Checking event: {sample.event_id}")
 
-    with SecureGraphClient() as client:
-        rs = client.fetch_event(sample.event_id)
+    with GraphClient() as client:
+        ev = client.fetch_event(sample.event_id)
 
-    check("fetch_event() succeeded",          rs.is_succeeded())
-    check("Event vertex present in graph",    not rs.is_empty(),
-          "Expected non-empty ResultSet")
+    check("fetch_event() returned a dict",    isinstance(ev, dict))
+    check("Event vertex present in graph",    bool(ev), "Expected non-empty dict")
 
-    if not rs.is_empty():
-        row   = rs.row_values(0)
-        props = row[0].as_map()
-        sev   = props.get("severity", None)
+    if ev:
+        sev = ev.get("severity")
         check("severity property stored correctly",
-              sev is not None and sev.as_int() == sample.severity,
-              f"got {sev.as_int() if sev else 'None'}, want {sample.severity}")
+              sev is not None and int(sev) == sample.severity,
+              f"got {sev}, want {sample.severity}")
 
 # ── Step 3 — trace_impact causal reasoning ───────────────────────────────────
 
@@ -137,7 +134,7 @@ def step3_trace_impact() -> None:
     section("Step 3 — trace_impact() Causal Reasoning")
 
     print(f"  {INFO}  Calling trace_impact('TSMC', max_hops=2)")
-    with SecureGraphClient() as client:
+    with GraphClient() as client:
         impacted = client.trace_impact("TSMC", max_hops=2)
 
     check("trace_impact() returned a list",   isinstance(impacted, list))
@@ -181,11 +178,11 @@ async def step4_architecture_trace() -> None:
               f"type={ev.event_type}  entities={[e.entity_id for e in ev.impacted_entities]}")
 
     # ③ graph state after ingestion (already done in step 1)
-    print(f"  {INFO}  [3] EventIngestor → NebulaGraph  (written in Step 1)")
+    print(f"  {INFO}  [3] EventIngestor → Memgraph  (written in Step 1)")
 
     # ④ trace_impact — causal chain
-    print(f"  {INFO}  [4] SecureGraphClient.trace_impact('TSMC', max_hops=2)")
-    with SecureGraphClient() as g:
+    print(f"  {INFO}  [4] GraphClient.trace_impact('TSMC', max_hops=2)")
+    with GraphClient() as g:
         impacted = g.trace_impact("TSMC", max_hops=2)
     if impacted:
         print(f"         → {len(impacted)} downstream companies affected:")
@@ -210,7 +207,7 @@ async def step4_architecture_trace() -> None:
 
 async def main() -> None:
     print(f"\n{'='*60}")
-    print("  Finance MCP — Phase 3 End-to-End Validation")
+    print("  QuantVex — End-to-End Validation")
     print(f"{'='*60}")
 
     try:

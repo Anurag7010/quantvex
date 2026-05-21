@@ -1,12 +1,11 @@
 """
-Finance MCP — System Verification Script
-Phase 3 Final
-
-Run inside Docker:
-    docker exec finance-mcp-server python tests/verify_system.py
+QuantVex — System Verification Script
 
 Run locally with all services up:
-    PYTHONPATH=src NEBULA_HOST=localhost .venv/bin/python tests/verify_system.py
+    PYTHONPATH=src .venv/bin/python scripts/verify_system.py
+
+Run inside Docker:
+    docker exec finance-mcp-server python scripts/verify_system.py
 
 Exit code 0 → all components healthy
 Exit code 1 → one or more checks failed
@@ -58,21 +57,19 @@ def check(label: str, fn: Callable) -> bool:
 
 
 # ===========================================================================
-# 1. NebulaGraph connection
+# 1. Memgraph connection
 # ===========================================================================
 def check_nebula_connection():
-    _section("1. NebulaGraph Connection")
+    _section("1. Memgraph Connection")
     from mcp_server.config import get_settings
-    from finance_mcp.graph.client import SecureGraphClient
+    from finance_mcp.graph.client import GraphClient
     s = get_settings()
 
     def _connect():
-        with SecureGraphClient(host=s.nebula_host, port=s.nebula_port) as c:
-            rs = c._execute("SHOW SPACES")
-            spaces = [rs.row_values(i)[0].as_string() for i in range(rs.row_size())]
-            assert "supply_chain" in spaces, f"supply_chain space missing; got {spaces}"
+        with GraphClient(host=s.memgraph_host, port=s.memgraph_port) as c:
+            assert c.ping(), "Memgraph ping failed"
 
-    check("NebulaGraph connects and supply_chain space exists", _connect)
+    check("Memgraph connects (Bolt on port 7687)", _connect)
 
 
 # ===========================================================================
@@ -81,29 +78,29 @@ def check_nebula_connection():
 def check_graph_data():
     _section("2. Graph Schema & Seed Data")
     from mcp_server.config import get_settings
-    from finance_mcp.graph.client import SecureGraphClient
+    from finance_mcp.graph.client import GraphClient
     s = get_settings()
 
-    with SecureGraphClient(host=s.nebula_host, port=s.nebula_port) as c:
+    with GraphClient(host=s.memgraph_host, port=s.memgraph_port) as c:
 
         def _companies():
-            rs = c._execute("USE supply_chain; MATCH (n:Company) RETURN count(n) AS cnt")
-            cnt = rs.row_values(0)[0].as_int()
+            rows = c._run("MATCH (n:Company) RETURN count(n) AS cnt")
+            cnt = rows[0]["cnt"] if rows else 0
             assert cnt >= 10, f"Only {cnt} companies in graph — run seed_production_data.py"
 
         def _commodities():
-            rs = c._execute("USE supply_chain; MATCH (n:Commodity) RETURN count(n) AS cnt")
-            cnt = rs.row_values(0)[0].as_int()
+            rows = c._run("MATCH (n:Commodity) RETURN count(n) AS cnt")
+            cnt = rows[0]["cnt"] if rows else 0
             assert cnt >= 6, f"Only {cnt} commodities"
 
         def _depends_on():
-            rs = c._execute("USE supply_chain; MATCH ()-[e:DEPENDS_ON]->() RETURN count(e) AS cnt")
-            cnt = rs.row_values(0)[0].as_int()
+            rows = c._run("MATCH ()-[e:DEPENDS_ON]->() RETURN count(e) AS cnt")
+            cnt = rows[0]["cnt"] if rows else 0
             assert cnt >= 20, f"Only {cnt} DEPENDS_ON edges — run seed_production_data.py"
 
         def _requires():
-            rs = c._execute("USE supply_chain; MATCH ()-[e:REQUIRES]->() RETURN count(e) AS cnt")
-            cnt = rs.row_values(0)[0].as_int()
+            rows = c._run("MATCH ()-[e:REQUIRES]->() RETURN count(e) AS cnt")
+            cnt = rows[0]["cnt"] if rows else 0
             assert cnt >= 10, f"Only {cnt} REQUIRES edges"
 
         def _tsmc_cascade():
@@ -314,7 +311,7 @@ def check_http_endpoint():
 # ===========================================================================
 def main():
     print(f"\n{_BOLD}{'='*60}{_RESET}")
-    print(f"{_BOLD}  Finance MCP — Phase 3 System Verification{_RESET}")
+    print(f"{_BOLD}  QuantVex — System Verification{_RESET}")
     print(f"{_BOLD}{'='*60}{_RESET}")
 
     t0 = time.time()

@@ -3,7 +3,7 @@ finance_mcp.ingestion.pipeline
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Orchestrates the full Phase 3 ingestion pipeline:
 
-    NewsClient  →  EventParser  →  EventIngestor  →  NebulaGraph
+    NewsClient  →  EventParser  →  EventIngestor  →  Memgraph
 
 Primary entry point::
 
@@ -18,7 +18,7 @@ Design
 * All three stages are independent error domains: an API failure raises
   immediately; parser failures are skipped (logged); ingestor failures
   are captured in IngestResult.errors without aborting the batch.
-* Config (NebulaGraph host/port, NewsAPI key) is read from MCP settings
+* Config (Memgraph host/port, NewsAPI key) is read from MCP settings
   so that the same .env file controls the whole stack.
 """
 
@@ -89,11 +89,11 @@ async def run_news_ingestion_pipeline(
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
     news_api_key: Optional[str] = None,
-    nebula_host: Optional[str] = None,
-    nebula_port: Optional[int] = None,
+    memgraph_host: Optional[str] = None,
+    memgraph_port: Optional[int] = None,
 ) -> PipelineResult:
     """
-    Fetch news, parse disruption events and write them to NebulaGraph.
+    Fetch news, parse disruption events and write them to Memgraph.
 
     Pipeline
     --------
@@ -103,13 +103,13 @@ async def run_news_ingestion_pipeline(
 
     Parameters
     ----------
-    query        : str         — NewsAPI search terms, e.g. "semiconductor"
-    limit        : int         — max articles to fetch (1–100)
-    from_date    : str | None  — ISO-8601 lower date bound
-    to_date      : str | None  — ISO-8601 upper date bound
-    news_api_key : str | None  — override the key from settings
-    nebula_host  : str | None  — NebulaGraph host (default: read from settings/env)
-    nebula_port  : int | None  — NebulaGraph port (default: read from settings/env)
+    query           : str         — NewsAPI search terms, e.g. "semiconductor"
+    limit           : int         — max articles to fetch (1–100)
+    from_date       : str | None  — ISO-8601 lower date bound
+    to_date         : str | None  — ISO-8601 upper date bound
+    news_api_key    : str | None  — override the key from settings
+    memgraph_host   : str | None  — Memgraph host (default: read from settings/env)
+    memgraph_port   : int | None  — Memgraph port (default: read from settings/env)
 
     Returns
     -------
@@ -172,8 +172,8 @@ async def run_news_ingestion_pipeline(
     # Resolve host/port: explicit args → env vars → client defaults
     # ------------------------------------------------------------------
     from finance_mcp.graph.client import DEFAULT_HOST, DEFAULT_PORT
-    resolved_host = nebula_host if nebula_host is not None else DEFAULT_HOST
-    resolved_port = nebula_port if nebula_port is not None else DEFAULT_PORT
+    resolved_host = memgraph_host if memgraph_host is not None else DEFAULT_HOST
+    resolved_port = memgraph_port if memgraph_port is not None else DEFAULT_PORT
     ingestor = EventIngestor(host=resolved_host, port=resolved_port)
     result.ingest_result = ingestor.ingest(parsed)
     logger.info(

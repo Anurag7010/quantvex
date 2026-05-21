@@ -1,11 +1,14 @@
 """
-Production seed script for the QuantVex supply-chain graph.
+Production seed script for the QuantVex supply-chain graph (Memgraph).
 
 Run locally:
-    PYTHONPATH=src NEBULA_HOST=localhost python3 scripts/seed_production_data.py
+    PYTHONPATH=src python3 scripts/seed_production_data.py
 
 Dry run:
     python3 scripts/seed_production_data.py --dry-run
+
+Prerequisites:
+    cd docker && docker-compose -f memgraph-docker-compose.yml up -d
 """
 from __future__ import annotations
 
@@ -16,7 +19,7 @@ from typing import Iterable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from finance_mcp.graph.client import SecureGraphClient
+from finance_mcp.graph.client import GraphClient
 
 Company = tuple[str, str, str]
 Commodity = tuple[str, str, str]
@@ -165,7 +168,6 @@ def _count_unique_pairs(edges: Iterable[tuple[str, str, object]]) -> int:
 
 
 def print_dry_run() -> None:
-    """Print seed counts without writing to NebulaGraph."""
     impact_edges = sum(len(event[3]) for event in HISTORICAL_EVENTS)
     print("DRY RUN - no graph writes")
     print(f"Company count: {len(COMPANIES)}")
@@ -176,31 +178,31 @@ def print_dry_run() -> None:
     print(f"IMPACTS edge count: {impact_edges}")
 
 
-def create_companies(client: SecureGraphClient) -> None:
+def create_companies(client: GraphClient) -> None:
     for ticker, name, sector in COMPANIES:
         client.insert_company(ticker, name, sector)
     print(f"Companies upserted: {len(COMPANIES)}")
 
 
-def create_commodities(client: SecureGraphClient) -> None:
+def create_commodities(client: GraphClient) -> None:
     for commodity_id, name, category in COMMODITIES:
         client.insert_commodity(commodity_id, name, category)
     print(f"Commodities upserted: {len(COMMODITIES)}")
 
 
-def create_depends_on_edges(client: SecureGraphClient) -> None:
+def create_depends_on_edges(client: GraphClient) -> None:
     for src, dst, weight in DEPENDS_ON_EDGES:
         client.insert_depends_on(src, dst, weight)
     print(f"DEPENDS_ON edges inserted: {_count_unique_pairs(DEPENDS_ON_EDGES)}")
 
 
-def create_requires_edges(client: SecureGraphClient) -> None:
+def create_requires_edges(client: GraphClient) -> None:
     for src, dst, volume in REQUIRES_EDGES:
         client.insert_requires(src, dst, volume)
     print(f"REQUIRES edges inserted: {_count_unique_pairs(REQUIRES_EDGES)}")
 
 
-def create_historical_events(client: SecureGraphClient) -> None:
+def create_historical_events(client: GraphClient) -> None:
     impact_count = 0
     for event_id, description, severity, impacted_entities in HISTORICAL_EVENTS:
         client.upsert_event(event_id, description, SEVERITY_SCORE[severity])
@@ -211,11 +213,11 @@ def create_historical_events(client: SecureGraphClient) -> None:
     print(f"IMPACTS edges inserted: {impact_count}")
 
 
-def verify_seeding(client: SecureGraphClient) -> None:
+def verify_seeding(client: GraphClient) -> None:
     checks = (
         ("TSMC", 3, {"AAPL", "NVDA", "AMD", "QCOM", "MSFT", "META", "GOOGL"}),
         ("NVDA", 3, {"MSFT", "META", "GOOGL", "AMZN", "TSLA"}),
-        ("CRUDE_OIL", 2, {"XOM", "CVX", "COP", "TSLA"}),
+        ("CRUDE_OIL", 2, {"XOM", "CVX", "TSLA"}),
         ("RARE_EARTH", 2, {"TSLA", "GE", "RTX", "LMT", "NVDA"}),
     )
     print("\nSupply-chain trace verification")
@@ -237,7 +239,7 @@ def main() -> None:
         print_dry_run()
         return
 
-    with SecureGraphClient() as client:
+    with GraphClient() as client:
         create_companies(client)
         create_commodities(client)
         create_depends_on_edges(client)

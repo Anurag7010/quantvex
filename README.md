@@ -41,9 +41,16 @@ User query → GPT-4o selects tool → tool executes against live data/graph/new
 
 **Supply Chain Causality Graph**
 
-- NebulaGraph knowledge graph with 57 companies, 20 commodities, 100+ dependency edges
+- Memgraph knowledge graph with 57 companies, 20 commodities, 100+ dependency edges
 - Multi-hop traversal to find all downstream companies exposed to a disruption
 - Pre-seeded with real S&P 500 top-50 supply chain relationships
+- **Causal beta calibration** — OLS-fitted lag models on DEPENDS_ON edges (via yfinance)
+
+**SEC EDGAR Integration**
+
+- Fetches the most recent 10-K filing for any US-listed company
+- GPT-4o extracts named supplier/customer relationships from Business and Risk Factors sections
+- Writes relationships to the graph as DEPENDS_ON edges tagged `source='EDGAR'`
 
 **Live News Ingestion & Impact Analysis**
 
@@ -54,8 +61,11 @@ User query → GPT-4o selects tool → tool executes against live data/graph/new
 **Multi-Agent Investment Reasoning**
 
 - Bull agent and Bear agent run concurrently, each gathering evidence from live tools
+- Bull rebuttal round challenges the bear case before the judge evaluates
 - Judge agent synthesises both theses into a decisive verdict: STRONG BUY / BUY / HOLD / SELL / STRONG SELL
 - Structured output renders as visual cards in the frontend
+- SSE streaming exposes each reasoning step in real time as it happens
+- **Verdict history** — every verdict is persisted to SQLite and accuracy-checked 5 and 30 trading days later
 
 **AI Chat Interface**
 
@@ -74,8 +84,8 @@ User query → GPT-4o selects tool → tool executes against live data/graph/new
 └────────────────────────┬────────────────────────────────────┘
                          │ HTTPS + X-API-Key
 ┌────────────────────────▼────────────────────────────────────┐
-│                    FastAPI MCP Server                        │
-│  /chat · /invoke · /subscribe · /health · /market/indices   │
+│                    FastAPI MCP Server (v2.0)                  │
+│  /chat · /invoke · /stream/analysis · /health · /verdicts    │
 │                   GPT-4o Chat Agent                          │
 │         Tool routing · Conversation history · Guardrails     │
 └──┬──────────────┬───────────────┬──────────────┬────────────┘
@@ -84,10 +94,10 @@ User query → GPT-4o selects tool → tool executes against live data/graph/new
 Market         Supply          News           Multi-Agent
 Connectors     Chain Graph     Pipeline       Reasoning
    │              │               │              │
-Finnhub        NebulaGraph    NewsData.io    Bull Agent
+Finnhub        Memgraph       NewsData.io    Bull Agent
 Alpha Vantage  (57 companies  EventParser    Bear Agent
 Binance WS     20 commodities EventIngestor  Judge Agent
-               100+ edges)
+               100+ edges)    EDGAR 10-K     Verdict SQLite
    │              │               │              │
    └──────────────┴───────────────┴──────────────┘
                          │
@@ -105,11 +115,14 @@ Binance WS     20 commodities EventIngestor  Judge Agent
 | ------------------ | ----------------------------------------------------------- |
 | AI Reasoning       | OpenAI GPT-4o (function calling)                            |
 | Backend            | FastAPI 0.104, Python 3.11, Uvicorn                         |
-| Supply Chain Graph | NebulaGraph (nGQL)                                          |
+| Supply Chain Graph | Memgraph (Bolt/Cypher, neo4j Python driver)                 |
 | Semantic Cache     | Qdrant + sentence-transformers (all-MiniLM-L6-v2)           |
-| Hot Cache          | Redis 5                                                     |
+| Hot Cache          | Redis 7                                                     |
 | Market Data        | Finnhub REST, Alpha Vantage REST, Binance WebSocket         |
 | News               | NewsData.io REST API                                        |
+| SEC Filings        | SEC EDGAR REST API (10-K filing extraction)                 |
+| Causal Analytics   | yfinance + OLS (scipy/numpy)                                |
+| Verdict Tracking   | SQLite                                                      |
 | Frontend           | React 19, TypeScript, Tailwind CSS, Framer Motion, Recharts |
 | Containerisation   | Docker Compose                                              |
 
@@ -124,22 +137,19 @@ quantvex/
 │   ├── chat_agent.py           # GPT-4o agent with tool calling
 │   ├── capabilities.json       # MCP tool catalog
 │   ├── schemas.py              # Pydantic request/response models
-│   ├── config.py               # Env-driven settings
-│   ├── invoke_handlers/        # One handler per MCP tool
-│   │   ├── quote_latest.py
-│   │   ├── quote_stream.py
-│   │   ├── trace_impact.py
-│   │   ├── news_analysis.py
-│   │   └── multi_agent_analysis.py
-│   └── utils/
-│       ├── logging.py          # Structlog JSON logger
-│       └── validation.py       # Input guardrails
+│   ├── config.py               # Env-driven settings (pydantic-settings)
+│   └── invoke_handlers/        # One handler per MCP tool
+│       ├── quote_latest.py
+│       ├── quote_stream.py
+│       ├── trace_impact.py
+│       ├── news_analysis.py
+│       ├── multi_agent_analysis.py
+│       ├── edgar_refresh.py    # SEC EDGAR 10-K → graph update
+│       └── stream_analysis.py  # SSE streaming handler
 │
 ├── src/finance_mcp/            # Core domain engine
-│   ├── graph/                  # NebulaGraph client + queries + schema
-│   │   ├── client.py           # SecureGraphClient (parameterised, injection-safe)
-│   │   ├── queries.py          # Immutable nGQL templates
-│   │   └── schema.py           # Space/tag/edge bootstrap
+│   ├── graph/
+│   │   └── client.py           # GraphClient — Bolt/Cypher, injection-safe, connection-pooled
 │   ├── news/                   # News ingestion pipeline
 │   │   ├── news_client.py      # NewsData.io adapter
 │   │   └── event_parser.py     # Rule-based disruption parser
@@ -150,9 +160,21 @@ quantvex/
 │   │   ├── bull_agent.py       # Upside thesis agent
 │   │   ├── bear_agent.py       # Downside thesis agent
 │   │   ├── judge_agent.py      # Verdict synthesis
-│   │   ├── orchestrator.py     # Concurrent bull/bear execution
+│   │   ├── orchestrator.py     # Concurrent bull/bear execution + rebuttal
 │   │   └── schemas.py          # Agent I/O contracts
-│   └── services/               # Shared business logic (decoupled from server)
+│   ├── edgar/                  # SEC EDGAR integration
+│   │   ├── edgar_client.py     # EDGAR HTTP client (CIK lookup + 10-K fetch)
+│   │   ├── supplier_extractor.py # GPT-4o relationship extraction
+│   │   └── graph_updater.py    # Writes DEPENDS_ON edges to graph
+│   ├── causal/                 # Causal beta calibration
+│   │   ├── price_fetcher.py    # yfinance price history download
+│   │   ├── beta_calculator.py  # OLS lag model
+│   │   └── calibrator.py       # Full-graph calibration orchestrator
+│   ├── verdict_history/        # Verdict accuracy tracking
+│   │   ├── db.py               # SQLite schema + connection helpers
+│   │   ├── tracker.py          # record_verdict + async 5d/30d price checks
+│   │   └── accuracy.py         # Accuracy stats aggregation
+│   └── services/               # Shared business logic
 │       ├── quote_service.py
 │       ├── graph_service.py
 │       └── news_service.py
@@ -174,21 +196,21 @@ quantvex/
 │       │   └── ui/             # AnimatedHero · AnimatedAIChat · FocusRail
 │       └── services/api.ts     # Typed Axios API client
 │
-├── tests/                      # 194 tests (unit + integration)
+├── tests/                      # Unit + integration tests
 ├── scripts/                    # Ops scripts
 │   ├── seed_production_data.py # Seeds full S&P 50 + commodities graph
 │   ├── verify_system.py        # System health verification
 │   └── e2e_pipeline.py         # End-to-end smoke test
 │
-├── infra/                      # Docker Compose for backend services
-└── docker/                     # NebulaGraph cluster compose
+├── infra/                      # Docker Compose (Redis, Qdrant, MCP server)
+└── docker/                     # Memgraph Docker Compose
 ```
 
 ---
 
 ## MCP Tools
 
-QuantVex exposes five tools through its Model Context Protocol server:
+QuantVex exposes six tools through its Model Context Protocol server:
 
 | Tool                   | Description                                                                               |
 | ---------------------- | ----------------------------------------------------------------------------------------- |
@@ -197,6 +219,7 @@ QuantVex exposes five tools through its Model Context Protocol server:
 | `trace_impact`         | Multi-hop supply chain traversal — finds all downstream companies exposed to a disruption |
 | `analyze_news_impact`  | Fetch live news → parse events → write to graph → return cascade impact                   |
 | `multi_agent_analysis` | Run concurrent bull/bear reasoning and return a judge verdict                             |
+| `edgar_refresh`        | Fetch SEC 10-K → extract suppliers via GPT-4o → update graph edges                       |
 
 ---
 
@@ -204,18 +227,22 @@ QuantVex exposes five tools through its Model Context Protocol server:
 
 All endpoints require `X-API-Key` header except `/health` and `/.well-known/mcp`.
 
-| Method | Endpoint                  | Description                           |
-| ------ | ------------------------- | ------------------------------------- |
-| `GET`  | `/.well-known/mcp`        | MCP discovery metadata                |
-| `GET`  | `/capabilities`           | Full tool catalog with schemas        |
-| `POST` | `/invoke`                 | Execute any MCP tool by name          |
-| `POST` | `/chat`                   | GPT-4o conversational interface       |
-| `POST` | `/subscribe`              | Subscribe to a live price stream      |
-| `POST` | `/unsubscribe`            | Cancel a stream subscription          |
-| `GET`  | `/subscriptions`          | List active subscriptions             |
-| `GET`  | `/market/indices`         | Live NIFTY 50, SENSEX, USD/INR        |
-| `GET`  | `/market/crypto/{symbol}` | Live crypto quote via Binance         |
-| `GET`  | `/health`                 | Deep health check across all services |
+| Method | Endpoint                   | Description                                   |
+| ------ | -------------------------- | --------------------------------------------- |
+| `GET`  | `/.well-known/mcp`         | MCP discovery metadata                        |
+| `GET`  | `/capabilities`            | Full tool catalog with schemas                |
+| `POST` | `/invoke`                  | Execute any MCP tool by name                  |
+| `POST` | `/chat`                    | GPT-4o conversational interface               |
+| `GET`  | `/stream/analysis`         | SSE stream of multi-agent reasoning steps     |
+| `POST` | `/subscribe`               | Subscribe to a live price stream              |
+| `POST` | `/unsubscribe`             | Cancel a stream subscription                  |
+| `GET`  | `/subscriptions`           | List active subscriptions                     |
+| `POST` | `/calibrate/edges`         | Trigger background causal beta calibration    |
+| `GET`  | `/verdicts/history`        | Verdict history (filterable by ticker)        |
+| `GET`  | `/verdicts/accuracy`       | Per-verdict-type accuracy statistics          |
+| `GET`  | `/market/indices`          | Live NIFTY 50, SENSEX, USD/INR                |
+| `GET`  | `/market/crypto/{symbol}`  | Live crypto quote via Binance                 |
+| `GET`  | `/health`                  | Deep health check across all services         |
 
 ### Example — Invoke a tool
 
@@ -244,15 +271,6 @@ curl -X POST http://localhost:8000/invoke \
 }
 ```
 
-### Example — Chat
-
-```bash
-curl -X POST http://localhost:8000/chat \
-  -H "X-API-Key: your-key" \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Which companies are exposed if TSMC shuts down?"}'
-```
-
 ### Example — Supply chain trace
 
 ```bash
@@ -262,6 +280,18 @@ curl -X POST http://localhost:8000/invoke \
   -d '{
     "tool_name": "trace_impact",
     "arguments": { "ticker": "TSMC", "max_hops": 3 }
+  }'
+```
+
+### Example — EDGAR refresh
+
+```bash
+curl -X POST http://localhost:8000/invoke \
+  -H "X-API-Key: your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool_name": "edgar_refresh",
+    "arguments": { "ticker": "AAPL" }
   }'
 ```
 
@@ -279,8 +309,8 @@ curl -X POST http://localhost:8000/invoke \
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-org/quantvex.git
-cd quantvex
+git clone https://github.com/Anurag7010/finance-mcp.git
+cd finance-mcp
 ```
 
 ### 2. Configure environment
@@ -308,8 +338,8 @@ REDIS_HOST=localhost
 REDIS_PORT=6379
 QDRANT_HOST=localhost
 QDRANT_PORT=6333
-NEBULA_HOST=localhost
-NEBULA_PORT=9669
+MEMGRAPH_HOST=localhost
+MEMGRAPH_PORT=7687
 
 # CORS
 ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
@@ -321,11 +351,11 @@ ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 # Start Redis, Qdrant, and the MCP server container
 cd infra && docker-compose up -d
 
-# Start NebulaGraph cluster (required for supply chain graph)
-cd docker && docker-compose -f nebula-docker-compose.yml up -d
+# Start Memgraph (required for supply chain graph)
+cd docker && docker-compose -f memgraph-docker-compose.yml up -d
 ```
 
-Wait ~30 seconds for all services to initialise.
+Wait ~20 seconds for services to initialise. Memgraph Lab UI is available at http://localhost:7444.
 
 ### 4. Install Python dependencies
 
@@ -336,15 +366,15 @@ pip install -r requirements.txt
 ### 5. Seed the supply chain graph
 
 ```bash
-python scripts/seed_production_data.py
+PYTHONPATH=src python scripts/seed_production_data.py
 ```
 
-This seeds 57 companies, 20 commodities, 64 DEPENDS_ON edges, 53 REQUIRES edges, and 8 pre-seeded historical events into NebulaGraph.
+This seeds 57 companies, 20 commodities, 64 DEPENDS_ON edges, 53 REQUIRES edges, and 8 pre-seeded historical events into Memgraph.
 
 ### 6. Verify system health
 
 ```bash
-python scripts/verify_system.py
+PYTHONPATH=src python scripts/verify_system.py
 ```
 
 All components should report OK.
@@ -352,7 +382,7 @@ All components should report OK.
 ### 7. Start the MCP server
 
 ```bash
-uvicorn mcp_server.server:app --host 0.0.0.0 --port 8000 --reload
+PYTHONPATH=src uvicorn mcp_server.server:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### 8. Start the frontend
@@ -370,7 +400,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Supply Chain Graph
 
-The NebulaGraph knowledge graph represents real-world supply chain dependencies across the S&P 500 top 50.
+The Memgraph knowledge graph represents real-world supply chain dependencies across the S&P 500 top 50. Uses Bolt protocol with the standard neo4j Python driver — fully parameterised Cypher queries throughout.
 
 **Graph Schema**
 
@@ -380,11 +410,11 @@ The NebulaGraph knowledge graph represents real-world supply chain dependencies 
 | `Commodity` | `name`, `category`         |
 | `Event`     | `description`, `severity`  |
 
-| Edge Type    | Properties     | Meaning                                         |
-| ------------ | -------------- | ----------------------------------------------- |
-| `DEPENDS_ON` | `weight` (0–1) | Company relies on another company as a supplier |
-| `REQUIRES`   | `volume`       | Company consumes a commodity                    |
-| `IMPACTS`    | `impact_time`  | An event affects a company or commodity         |
+| Edge Type    | Properties                         | Meaning                                         |
+| ------------ | ---------------------------------- | ----------------------------------------------- |
+| `DEPENDS_ON` | `weight`, `beta`, `lag_days`, `r_squared` | Company relies on another company as a supplier |
+| `REQUIRES`   | `volume`                           | Company consumes a commodity                    |
+| `IMPACTS`    | `impact_time`                      | An event affects a company or commodity         |
 
 **Example trace**
 
@@ -412,11 +442,19 @@ User: "Give me a full analysis of NVDA"
          ├── Bull Agent ──────────────────────────────────┐
          │   Gathers: live quote, trace_impact evidence    │
          │   Builds: upside thesis + confidence score      │
-         │                                                 ▼
-         └── Bear Agent ──────────────────────────────► Judge Agent
-             Gathers: news impact, blast radius            Compares confidence gap
-             Builds: downside thesis + confidence score    Produces: verdict + conviction
-                                                           Returns: structured JSON
+         │                                                 │
+         └── Bear Agent                                    │
+             Gathers: news impact, blast radius            │
+             Builds: downside thesis + confidence score    │
+                         │                                 │
+                         ▼                                 │
+                    Bull Rebuttal ◄──────────────────────┘
+                         │
+                         ▼
+                    Judge Agent
+                    Compares confidence gap
+                    Produces: verdict + conviction
+                    Returns: structured JSON
 ```
 
 **Verdict scale**
@@ -429,6 +467,21 @@ User: "Give me a full analysis of NVDA"
 | `SELL`              | Bear confidence gap ≥ 8 points                    |
 | `STRONG SELL`       | Bear confidence gap ≥ 15 points                   |
 | `INSUFFICIENT DATA` | Max confidence < 45%                              |
+
+Verdicts are stored in SQLite and automatically checked for accuracy 5 and 30 trading days later using yfinance price data. Accuracy statistics are available via `/verdicts/accuracy`.
+
+---
+
+## Causal Beta Calibration
+
+The `/calibrate/edges` endpoint triggers a background job that:
+
+1. Fetches all DEPENDS_ON edges from Memgraph
+2. Downloads 2 years of daily close prices via yfinance for each unique ticker
+3. Fits OLS regression at lags 1–30 trading days for each supplier–dependent pair
+4. Writes `beta`, `lag_days`, and `r_squared` onto each edge
+
+This quantifies _how much_ and _how quickly_ a supplier shock transmits to a downstream company.
 
 ---
 
@@ -445,8 +498,6 @@ pytest tests/ -v -m "not integration"
 pytest tests/ --cov=mcp_server --cov=src/finance_mcp --cov-report=term-missing
 ```
 
-**Test suite:** 194 tests across 11 test files covering connectors, graph client security, query injection safety, event parsing, pipeline orchestration, and MCP endpoint contracts.
-
 ---
 
 ## Security
@@ -454,38 +505,40 @@ pytest tests/ --cov=mcp_server --cov=src/finance_mcp --cov-report=term-missing
 - All tool endpoints require `X-API-Key` header — returns 401 on missing/invalid key
 - Rate limiting: 60 requests per 60-second window per API key — returns 429 on breach
 - CORS restricted to configured `ALLOWED_ORIGINS` — no wildcard in production
-- NebulaGraph uses a restricted `mcp_agent` runtime user with read-only graph access
-- All graph queries use parameterised execution — injection markers are explicitly checked
+- All graph queries use parameterised Cypher — no string interpolation of user input
+- EDGAR URLs are constructed from structured fields (CIK, accession number) — no SSRF surface
+- GPT-4o output from EDGAR extraction is JSON-parsed and field-validated before graph write
 - Frontend API key loaded from environment variable, never hardcoded
 
 ---
 
 ## Environment Variables
 
-| Variable                | Required | Description                      |
-| ----------------------- | -------- | -------------------------------- |
-| `OPENAI_API_KEY`        | ✅       | GPT-4o API key                   |
-| `MCP_API_KEY`           | ✅       | Server authentication key        |
-| `FINNHUB_API_KEY`       | ✅       | Finnhub market data              |
-| `ALPHA_VANTAGE_API_KEY` | ✅       | Alpha Vantage market data        |
-| `NEWSDATA_API_KEY`      | ✅       | NewsData.io real-time news       |
-| `REDIS_HOST`            | ✅       | Redis hostname                   |
-| `REDIS_PORT`            | ✅       | Redis port (default: 6379)       |
-| `QDRANT_HOST`           | ✅       | Qdrant hostname                  |
-| `QDRANT_PORT`           | ✅       | Qdrant port (default: 6333)      |
-| `NEBULA_HOST`           | ✅       | NebulaGraph graphd hostname      |
-| `NEBULA_PORT`           | ✅       | NebulaGraph port (default: 9669) |
-| `ALLOWED_ORIGINS`       | ✅       | Comma-separated CORS origins     |
+| Variable                | Required | Description                       |
+| ----------------------- | -------- | --------------------------------- |
+| `OPENAI_API_KEY`        | ✅       | GPT-4o API key                    |
+| `MCP_API_KEY`           | ✅       | Server authentication key         |
+| `FINNHUB_API_KEY`       | ✅       | Finnhub market data               |
+| `ALPHA_VANTAGE_API_KEY` | ✅       | Alpha Vantage market data         |
+| `NEWSDATA_API_KEY`      | ✅       | NewsData.io real-time news        |
+| `REDIS_HOST`            | ✅       | Redis hostname                    |
+| `REDIS_PORT`            | ✅       | Redis port (default: 6379)        |
+| `QDRANT_HOST`           | ✅       | Qdrant hostname                   |
+| `QDRANT_PORT`           | ✅       | Qdrant port (default: 6333)       |
+| `MEMGRAPH_HOST`         | ✅       | Memgraph hostname                 |
+| `MEMGRAPH_PORT`         | ✅       | Memgraph Bolt port (default: 7687)|
+| `ALLOWED_ORIGINS`       | ✅       | Comma-separated CORS origins      |
+| `VERDICT_DB_PATH`       | ✗        | SQLite path (default: verdicts.db)|
 
 ---
 
 ## Operational Scripts
 
-| Script                            | Purpose                                                                                       |
-| --------------------------------- | --------------------------------------------------------------------------------------------- |
-| `scripts/seed_production_data.py` | Seeds full S&P 50 company/commodity graph. Safe to re-run (idempotent). Supports `--dry-run`. |
-| `scripts/verify_system.py`        | Checks all service connections, graph health, handler registration, and GPT-4o access.        |
-| `scripts/e2e_pipeline.py`         | Full end-to-end smoke test: news fetch → graph ingest → trace → multi-agent.                  |
+| Script                            | Purpose                                                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `scripts/seed_production_data.py` | Seeds full S&P 50 company/commodity graph. Safe to re-run (idempotent). Supports `--dry-run`.    |
+| `scripts/verify_system.py`        | Checks all service connections, graph health, handler registration, and GPT-4o access.           |
+| `scripts/e2e_pipeline.py`         | Full end-to-end smoke test: news fetch → graph ingest → trace → multi-agent.                     |
 
 ---
 
@@ -498,7 +551,7 @@ pytest tests/ --cov=mcp_server --cov=src/finance_mcp --cov-report=term-missing
 3. Export from `mcp_server/invoke_handlers/__init__.py`
 4. Add dispatch branch in `mcp_server/server.py` `/invoke` handler
 5. Add GPT-4o function declaration and `_execute_tool` mapping in `mcp_server/chat_agent.py`
-6. Add tests in `tests/` mirroring `tests/test_mcp_invoke.py`
+6. Add tests in `tests/`
 
 ### Adding a new data source
 

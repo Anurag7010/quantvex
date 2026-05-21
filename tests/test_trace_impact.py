@@ -1,15 +1,15 @@
 """
-Integration tests for SecureGraphClient.trace_impact()
+Integration tests for GraphClient.trace_impact()
 
 Graph topology used in this module
 -----------------------------------
-                    TSMC_TI (target — semiconductor foundry)
-                    ↑               ↑
-         AAPL_TI              NVDA_TI
-         (1-hop)               (1-hop)
-             ↑
-        DELL_TI
-        (2-hop from TSMC_TI via AAPL_TI)
+                TSMC_TI (target — semiconductor foundry)
+                ↑               ↑
+     AAPL_TI              NVDA_TI
+     (1-hop)               (1-hop)
+         ↑
+    DELL_TI
+    (2-hop from TSMC_TI via AAPL_TI)
 
 Edges (all DEPENDS_ON, direction = dependent → supplier):
     AAPL_TI  → TSMC_TI   weight 0.9
@@ -21,45 +21,35 @@ A TSMC shock (max_hops=2) should additionally surface DELL_TI.
 
 Run
 ---
-    cd /Users/anuragraut/Desktop/EDAI_MCP/finance-mcp
-    PYTHONPATH=src .venv/bin/python3.11 -m pytest tests/test_trace_impact.py -v
+    PYTHONPATH=src pytest tests/test_trace_impact.py -v
 """
 
 from __future__ import annotations
 
+import socket
 import pytest
-from unittest.mock import MagicMock
 
-from nebula3.gclient.net import ConnectionPool
-from nebula3.Config import Config
-
-from finance_mcp.graph.client import SecureGraphClient
+from finance_mcp.graph.client import GraphClient
 
 # ---------------------------------------------------------------------------
-# Test VIDs  (suffix _TI avoids any clash with other test modules)
+# Test VIDs
 # ---------------------------------------------------------------------------
-_TSMC   = "TSMC_TI"
-_AAPL   = "AAPL_TI"
-_NVDA   = "NVDA_TI"
-_DELL   = "DELL_TI"
-_ALL    = [_TSMC, _AAPL, _NVDA, _DELL]
+_TSMC = "TSMC_TI"
+_AAPL = "AAPL_TI"
+_NVDA = "NVDA_TI"
+_DELL = "DELL_TI"
+_ALL  = [_TSMC, _AAPL, _NVDA, _DELL]
+
+_MEMGRAPH_HOST = "127.0.0.1"
+_MEMGRAPH_PORT = 7687
 
 
-def _root_exec(stmt: str) -> None:
-    """One-shot root session helper used for seeding and teardown."""
-    cfg = Config()
-    cfg.max_connection_pool_size = 1
-    pool = ConnectionPool()
-    pool.init([("127.0.0.1", 9669)], cfg)
-    session = pool.get_session("root", "nebula")
+def _memgraph_reachable() -> bool:
     try:
-        session.execute("USE supply_chain")
-        r = session.execute(stmt)
-        if not r.is_succeeded():
-            raise RuntimeError(f"seed/teardown failed: {r.error_msg()}")
-    finally:
-        session.release()
-        pool.close()
+        with socket.create_connection((_MEMGRAPH_HOST, _MEMGRAPH_PORT), timeout=2):
+            return True
+    except OSError:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -67,128 +57,120 @@ def _root_exec(stmt: str) -> None:
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
-def mock_client():
-    """
-    SecureGraphClient with a fake pool — for validation tests that raise
-    ValueError before any real graph interaction.
-    """
-    c = SecureGraphClient(host="127.0.0.1", port=9669)
-    fake_pool = MagicMock()
-    fake_session = MagicMock()
-    fake_session.execute.return_value = MagicMock(is_succeeded=lambda: True)
-    fake_pool.get_session.return_value = fake_session
-    c._pool = fake_pool
-    return c
-
-
-@pytest.fixture(scope="module")
 def client():
-    """Live SecureGraphClient — requires running NebulaGraph."""
-    with SecureGraphClient(host="127.0.0.1", port=9669) as c:
+    """Live GraphClient — requires running Memgraph."""
+    with GraphClient(host=_MEMGRAPH_HOST, port=_MEMGRAPH_PORT) as c:
         yield c
 
 
 @pytest.fixture(scope="module")
-def seed_graph():
+def seed_graph(client: GraphClient):
     """Insert TSMC shock topology before any test in this module runs."""
-    vids_csv = ", ".join(f'"{v}"' for v in _ALL)
 
-    # Clean any stale data from a previous run
-    try:
-        _root_exec(f"DELETE VERTEX {vids_csv} WITH EDGE")
-    except RuntimeError:
-        pass  # vertices may not exist yet
+    # Clean stale data
+    client._run(
+        "MATCH (n) WHERE n.ticker IN $tickers DETACH DELETE n",
+        tickers=_ALL,
+    )
 
-    _root_exec(
-        f'INSERT VERTEX Company(ticker, name, sector) '
-        f'VALUES '
-        f'  "{_TSMC}":("TSMC",  "Taiwan Semiconductor Mfg.", "Technology"), '
-        f'  "{_AAPL}":("AAPL",  "Apple Inc.",                "Technology"), '
-        f'  "{_NVDA}":("NVDA",  "NVIDIA Corp.",              "Technology"), '
-        f'  "{_DELL}":("DELL",  "Dell Technologies",         "Technology")'
+    # Vertices
+    for ticker, name in [
+        (_TSMC, "Taiwan Semiconductor Mfg."),
+        (_AAPL, "Apple Inc."),
+        (_NVDA, "NVIDIA Corp."),
+        (_DELL, "Dell Technologies"),
+    ]:
+        client._run(
+            "MERGE (c:Company {ticker: $ticker}) SET c.name = $name, c.sector = $sector",
+            ticker=ticker, name=name, sector="Technology",
+        )
+
+    # DEPENDS_ON edges
+    client._run(
+        "MATCH (a:Company {ticker: $a}), (b:Company {ticker: $b}) "
+        "MERGE (a)-[r:DEPENDS_ON]->(b) SET r.weight = $w",
+        a=_AAPL, b=_TSMC, w=0.9,
     )
-    # 1-hop dependents of TSMC
-    _root_exec(
-        f'INSERT EDGE DEPENDS_ON(weight) '
-        f'VALUES '
-        f'  "{_AAPL}"->"{_TSMC}":(0.9), '
-        f'  "{_NVDA}"->"{_TSMC}":(0.8)'
+    client._run(
+        "MATCH (a:Company {ticker: $a}), (b:Company {ticker: $b}) "
+        "MERGE (a)-[r:DEPENDS_ON]->(b) SET r.weight = $w",
+        a=_NVDA, b=_TSMC, w=0.8,
     )
-    # 2-hop dependent chain: DELL → AAPL → TSMC
-    _root_exec(
-        f'INSERT EDGE DEPENDS_ON(weight) '
-        f'VALUES "{_DELL}"->"{_AAPL}":(0.7)'
+    client._run(
+        "MATCH (a:Company {ticker: $a}), (b:Company {ticker: $b}) "
+        "MERGE (a)-[r:DEPENDS_ON]->(b) SET r.weight = $w",
+        a=_DELL, b=_AAPL, w=0.7,
     )
 
     yield
 
     # Teardown
-    try:
-        _root_exec(f"DELETE VERTEX {vids_csv} WITH EDGE")
-    except RuntimeError:
-        pass
+    client._run(
+        "MATCH (n) WHERE n.ticker IN $tickers DETACH DELETE n",
+        tickers=_ALL,
+    )
 
 
 # ---------------------------------------------------------------------------
-# Input validation (no live graph required — fails before _execute)
+# Input validation (no live graph required)
 # ---------------------------------------------------------------------------
 
 class TestTraceImpactValidation:
-    """
-    Input-validation tests — raise ValueError before touching NebulaGraph.
-    Uses mock_client so they run without a live graph.
-    """
+    """Validation tests — raise ValueError before touching Memgraph."""
 
-    def test_empty_ticker_raises(self, mock_client: SecureGraphClient):
+    def test_empty_ticker_raises(self):
+        c = GraphClient()
         with pytest.raises(ValueError, match="target_ticker"):
-            mock_client.trace_impact("")
+            c.trace_impact("")
 
-    def test_invalid_ticker_chars_raises(self, mock_client: SecureGraphClient):
+    def test_invalid_ticker_chars_raises(self):
+        c = GraphClient()
         with pytest.raises(ValueError, match="target_ticker"):
-            mock_client.trace_impact("TSMC Corp!")
+            c.trace_impact("TSMC Corp!")
 
-    def test_ticker_too_long_raises(self, mock_client: SecureGraphClient):
+    def test_ticker_too_long_raises(self):
+        c = GraphClient()
         with pytest.raises(ValueError, match="target_ticker"):
-            mock_client.trace_impact("T" * 65)
+            c.trace_impact("T" * 65)
 
-    def test_max_hops_zero_raises(self, mock_client: SecureGraphClient):
+    def test_max_hops_zero_raises(self):
+        c = GraphClient()
         with pytest.raises(ValueError, match="max_hops"):
-            mock_client.trace_impact("TSMC_TI", max_hops=0)
+            c.trace_impact("TSMC_TI", max_hops=0)
 
-    def test_max_hops_too_large_raises(self, mock_client: SecureGraphClient):
+    def test_max_hops_too_large_raises(self):
+        c = GraphClient()
         with pytest.raises(ValueError, match="max_hops"):
-            mock_client.trace_impact("TSMC_TI", max_hops=6)
+            c.trace_impact("TSMC_TI", max_hops=6)
 
-    def test_max_hops_non_int_raises(self, mock_client: SecureGraphClient):
+    def test_max_hops_non_int_raises(self):
+        c = GraphClient()
         with pytest.raises(ValueError, match="max_hops"):
-            mock_client.trace_impact("TSMC_TI", max_hops=2.5)  # type: ignore[arg-type]
+            c.trace_impact("TSMC_TI", max_hops=2.5)  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
-# Return type contract
+# Return-type contract
 # ---------------------------------------------------------------------------
 
 @pytest.mark.integration
 class TestTraceImpactReturnType:
-    """
-    Return-type contract tests — require a live graph with the seeded topology.
-    """
 
-    def test_returns_list(self, client: SecureGraphClient):
+    def test_returns_list(self, client: GraphClient):
         result = client.trace_impact(_TSMC, max_hops=1)
         assert isinstance(result, list)
 
-    def test_each_element_is_dict(self, client: SecureGraphClient):
+    def test_each_element_is_dict(self, client: GraphClient):
         result = client.trace_impact(_TSMC, max_hops=1)
         for item in result:
             assert isinstance(item, dict)
 
-    def test_each_dict_has_required_keys(self, client: SecureGraphClient):
+    def test_each_dict_has_required_keys(self, client: GraphClient):
         result = client.trace_impact(_TSMC, max_hops=1)
         for item in result:
             assert set(item.keys()) == {"ticker", "name", "sector"}
 
-    def test_all_values_are_strings(self, client: SecureGraphClient):
+    def test_all_values_are_strings(self, client: GraphClient):
         result = client.trace_impact(_TSMC, max_hops=1)
         for item in result:
             assert isinstance(item["ticker"], str)
@@ -204,65 +186,48 @@ class TestTraceImpactReturnType:
 @pytest.mark.usefixtures("seed_graph")
 class TestTraceTsmcShock:
 
-    def test_no_impact_on_unknown_ticker(self, client: SecureGraphClient):
+    def test_no_impact_on_unknown_ticker(self, client: GraphClient):
         result = client.trace_impact("UNKNOWN_TICKER_XYZ", max_hops=3)
         assert result == []
 
-    def test_tsmc_shock_1hop_finds_direct_dependents(
-        self, client: SecureGraphClient
-    ):
-        """Apple and NVIDIA depend directly on TSMC — both must appear."""
+    def test_tsmc_shock_1hop_finds_direct_dependents(self, client: GraphClient):
         result = client.trace_impact(_TSMC, max_hops=1)
         tickers = {r["ticker"] for r in result}
         assert _AAPL in tickers, f"AAPL_TI missing from 1-hop result: {tickers}"
         assert _NVDA in tickers, f"NVDA_TI missing from 1-hop result: {tickers}"
 
-    def test_tsmc_shock_1hop_excludes_indirect(
-        self, client: SecureGraphClient
-    ):
-        """DELL is 2 hops away — should NOT appear with max_hops=1."""
+    def test_tsmc_shock_1hop_excludes_indirect(self, client: GraphClient):
         result = client.trace_impact(_TSMC, max_hops=1)
         tickers = {r["ticker"] for r in result}
-        assert _DELL not in tickers, (
-            f"DELL_TI should be absent from 1-hop result but found in: {tickers}"
-        )
+        assert _DELL not in tickers, f"DELL_TI should be absent from 1-hop result"
 
-    def test_tsmc_shock_2hop_finds_indirect_dependent(
-        self, client: SecureGraphClient
-    ):
-        """DELL depends on AAPL which depends on TSMC — visible at 2 hops."""
+    def test_tsmc_shock_2hop_finds_indirect_dependent(self, client: GraphClient):
         result = client.trace_impact(_TSMC, max_hops=2)
         tickers = {r["ticker"] for r in result}
         assert _DELL in tickers, f"DELL_TI missing from 2-hop result: {tickers}"
 
-    def test_tsmc_shock_1hop_count(self, client: SecureGraphClient):
-        """Exactly 2 distinct companies are 1-hop dependents of TSMC."""
+    def test_tsmc_shock_1hop_count(self, client: GraphClient):
         result = client.trace_impact(_TSMC, max_hops=1)
         assert len(result) == 2
 
-    def test_tsmc_shock_2hop_count(self, client: SecureGraphClient):
-        """3 distinct companies are within 2 hops of TSMC."""
+    def test_tsmc_shock_2hop_count(self, client: GraphClient):
         result = client.trace_impact(_TSMC, max_hops=2)
         assert len(result) == 3
 
-    def test_result_tickers_are_deduplicated(self, client: SecureGraphClient):
-        """DISTINCT in nGQL — no company should appear more than once."""
+    def test_result_tickers_are_deduplicated(self, client: GraphClient):
         result = client.trace_impact(_TSMC, max_hops=3)
         tickers = [r["ticker"] for r in result]
-        assert len(tickers) == len(set(tickers)), (
-            f"Duplicate tickers found: {tickers}"
-        )
+        assert len(tickers) == len(set(tickers)), f"Duplicate tickers: {tickers}"
 
-    def test_company_names_populated(self, client: SecureGraphClient):
-        """name field must be a non-empty string for every record."""
+    def test_company_names_populated(self, client: GraphClient):
         result = client.trace_impact(_TSMC, max_hops=2)
         for item in result:
             assert item["name"], f"Empty name for ticker {item['ticker']!r}"
 
-    def test_max_hops_boundary_one_accepted(self, client: SecureGraphClient):
+    def test_max_hops_boundary_one_accepted(self, client: GraphClient):
         result = client.trace_impact(_TSMC, max_hops=1)
         assert isinstance(result, list)
 
-    def test_max_hops_boundary_five_accepted(self, client: SecureGraphClient):
+    def test_max_hops_boundary_five_accepted(self, client: GraphClient):
         result = client.trace_impact(_TSMC, max_hops=5)
         assert isinstance(result, list)
