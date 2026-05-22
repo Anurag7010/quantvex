@@ -196,10 +196,10 @@ const ChatInterface: React.FC = () => {
   };
 
   const suggestedQueries = [
-    "What's the current price of Apple stock?",
-    "How is Bitcoin performing today?",
-    "Compare Microsoft and Google stock prices",
-    "Show me Tesla's latest price",
+    "Analyze NVDA",
+    "Which companies depend on TSMC?",
+    "Impact of US chip export ban on semiconductors?",
+    "Current price of AAPL?",
   ];
 
   const handleSuggestionClick = (query: string) => {
