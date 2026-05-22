@@ -11,6 +11,10 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256m
     networks:
       - finance-mcp-net
 
@@ -31,6 +35,10 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
     networks:
       - finance-mcp-net
 

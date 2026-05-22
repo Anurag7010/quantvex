@@ -82,6 +82,10 @@ class QuantVexChatAgent:
         self._tools = self._build_tools()
         self._system_prompt = self._build_system_prompt()
 
+    @property
+    def tools(self) -> list[dict[str, Any]]:
+        return self._tools
+
     def _build_tools(self) -> list[dict[str, Any]]:
         """Build OpenAI-compatible function tool declarations."""
         return [
