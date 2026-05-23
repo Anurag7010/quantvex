@@ -474,14 +474,22 @@ async def seed_graph(request: Request, api_key: str = Security(get_api_key)):
     neo4j_user = body.get("user") or os.environ.get("MEMGRAPH_USER", "neo4j")
     neo4j_password = body.get("password") or os.environ.get("MEMGRAPH_PASSWORD", "")
     try:
+        from neo4j import GraphDatabase
         from scripts.seed_production_data import (
             create_companies, create_commodities, create_depends_on_edges,
             create_requires_edges, create_historical_events,
         )
         from finance_mcp.graph.client import GraphClient
+
+        # Create driver directly — bypass GraphClient env-var defaults
+        driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
+
+        class _DirectClient(GraphClient):
+            def initialize_pool(self):
+                self._driver = driver
+
         results = {}
-        with GraphClient(user=neo4j_user, password=neo4j_password) as client:
-            client._uri = neo4j_uri
+        with _DirectClient(user=neo4j_user, password=neo4j_password) as client:
             create_companies(client)
             results["companies"] = "ok"
             create_commodities(client)
@@ -492,6 +500,7 @@ async def seed_graph(request: Request, api_key: str = Security(get_api_key)):
             results["requires"] = "ok"
             create_historical_events(client)
             results["events"] = "ok"
+        driver.close()
         return JSONResponse(content={"status": "seeded", "results": results})
     except Exception as exc:
         return JSONResponse(content={"status": "error", "error": str(exc)}, status_code=500)
