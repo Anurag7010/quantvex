@@ -24,8 +24,10 @@ class RedisClient:
         self._client = redis.Redis(
             host=settings.redis_host,
             port=settings.redis_port,
+            password=settings.redis_password or None,
+            ssl=settings.redis_ssl,
             db=settings.redis_db,
-            decode_responses=True
+            decode_responses=True,
         )
         self._connected = False
     

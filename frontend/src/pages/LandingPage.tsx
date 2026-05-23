@@ -552,10 +552,10 @@ function InfoSection({ onExplore }: { onExplore: () => void }) {
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/40" />
             <div className="relative z-10 text-center px-4">
               <p className="text-5xl sm:text-6xl md:text-7xl lg:text-[88px] font-light tracking-tight text-white drop-shadow">
-                57+
+                3
               </p>
               <p className="text-white/85 text-sm mt-2">
-                Companies in supply chain graph
+                AI agents — Bull · Bear · Judge
               </p>
             </div>
           </div>

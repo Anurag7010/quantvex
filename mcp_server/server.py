@@ -115,9 +115,9 @@ async def lifespan(app: FastAPI):
     # Initialize Qdrant
     semantic_cache = get_semantic_cache()
     if semantic_cache.initialize():
-        logger.info("qdrant_initialized")
+        logger.info("semantic_cache_initialized")
     else:
-        logger.warning("qdrant_initialization_failed")
+        logger.warning("semantic_cache_init_failed")
 
     # Initialize verdict history SQLite DB
     try:
@@ -370,7 +370,7 @@ async def chat(request: ChatRequest):
             content=ChatResponse(
                 response="",
                 success=False,
-                error="GPT chat agent not available. Check OPENAI_API_KEY configuration."
+                error="GPT chat agent not available. Check GROQ_API_KEY configuration."
             ).model_dump()
         )
     
@@ -394,8 +394,8 @@ async def chat(request: ChatRequest):
             error_msg = "The OpenAI API quota or rate limit has been exceeded. Please try again shortly or check your billing settings."
         elif "401" in error_msg or "authentication" in lower_error or "incorrect api key" in lower_error:
             error_msg = "Invalid OpenAI API key. Please check your configuration."
-        elif "OPENAI_API_KEY" in error_msg:
-            error_msg = "OpenAI API key not configured. Please add it to your environment settings."
+        elif "GROQ_API_KEY" in error_msg:
+            error_msg = "Groq API key not configured. Please add GROQ_API_KEY to your environment settings."
         
         return JSONResponse(
             status_code=200,  # Return 200 so frontend can display error message
@@ -438,17 +438,17 @@ async def health_check():
     try:
         qdrant = get_semantic_cache()
         if qdrant.health():
-            status_payload["components"]["qdrant"] = {"status": "ok"}
+            status_payload["components"]["semantic_cache"] = {"status": "ok"}
         else:
             raise RuntimeError("Qdrant health check failed")
     except Exception as e:
-        status_payload["components"]["qdrant"] = {"status": "degraded", "error": str(e)}
+        status_payload["components"]["semantic_cache"] = {"status": "degraded", "error": str(e)}
         status_payload["status"] = "degraded"
 
     status_payload["components"]["openai"] = {
-        "status": "ok" if settings.openai_api_key else "misconfigured"
+        "status": "ok" if settings.groq_api_key else "misconfigured"
     }
-    if not settings.openai_api_key:
+    if not settings.groq_api_key:
         status_payload["status"] = "degraded"
 
     status_payload["components"]["subscriptions"] = {

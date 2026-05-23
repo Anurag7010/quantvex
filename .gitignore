@@ -59,3 +59,5 @@ docker/certs/*
 !docker/certs/.gitkeep
 infra/.env
 frontend/.env
+
+paper/

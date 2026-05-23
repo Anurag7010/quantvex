@@ -6,6 +6,7 @@
 
 **Real-time market data · Supply chain causality · Live news ingestion · Multi-agent reasoning**
 
+[![Live Demo](https://img.shields.io/badge/demo-live-brightgreen?style=flat-square)](https://quantvex.vercel.app)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
@@ -37,7 +38,7 @@ User query → GPT-4o selects tool → tool executes against live data/graph/new
 - Live stock quotes with multi-provider fallback (Finnhub → Alpha Vantage → Redis cache)
 - Crypto prices via Binance WebSocket and REST API
 - Indian market indices (NIFTY 50, SENSEX) and live USD/INR FX rate
-- Two-level cache: Redis snapshot + Qdrant semantic cache
+- Two-level cache: Redis snapshot + hash-based semantic cache
 
 **Supply Chain Causality Graph**
 
@@ -72,6 +73,14 @@ User query → GPT-4o selects tool → tool executes against live data/graph/new
 - GPT-4o with strict domain guardrails — finance only, no off-topic answers
 - Full conversation history with 20-turn rolling context window
 - Deterministic tool routing: the model cannot answer news questions from memory
+
+## Live Demo
+
+| Service | URL |
+|---|---|
+| Frontend | [quantvex.vercel.app](https://quantvex.vercel.app) |
+| API (Swagger) | [quantvex-api.up.railway.app/docs](https://quantvex-api.up.railway.app/docs) |
+| MCP Manifest | [quantvex-api.up.railway.app/.well-known/mcp](https://quantvex-api.up.railway.app/.well-known/mcp) |
 
 ---
 

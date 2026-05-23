@@ -1,7 +1,7 @@
 """
 finance_mcp.edgar.supplier_extractor
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-GPT-4o extraction of supplier / customer relationships from 10-K filing text.
+Groq Llama-3.3 extraction of supplier / customer relationships from 10-K filing text.
 
 Public API
 ----------
@@ -22,7 +22,7 @@ from mcp_server.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-_MAX_FILING_CHARS = 12_000  # cap before sending to GPT (~3 000 tokens)
+_MAX_FILING_CHARS = 12_000  # cap before sending to Groq (~3 000 tokens)
 
 _SYSTEM_PROMPT = (
     "You are a financial analyst specialised in supply chain risk. "
@@ -67,17 +67,20 @@ async def extract_supplier_relationships(
     ticker: str,
 ) -> List[SupplierRelationship]:
     """
-    Call GPT-4o to extract named supplier/customer relationships from 10-K text.
+    Call Groq Llama-3.3 to extract named supplier/customer relationships from 10-K text.
 
-    Returns an empty list if the OpenAI key is absent, if the model returns
+    Returns an empty list if the Groq key is absent, if the model returns
     no relationships, or if parsing fails — never raises.
     """
     settings = get_settings()
-    if not settings.openai_api_key:
-        logger.warning("edgar_extractor: OPENAI_API_KEY not set — returning empty relationships")
+    if not settings.groq_api_key:
+        logger.warning("edgar_extractor: GROQ_API_KEY not set — returning empty relationships")
         return []
 
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = AsyncOpenAI(
+        api_key=settings.groq_api_key,
+        base_url=settings.groq_base_url,
+    )
     user_content = _USER_PROMPT.format(
         ticker=ticker,
         filing_text=filing_text[:_MAX_FILING_CHARS],
@@ -85,7 +88,7 @@ async def extract_supplier_relationships(
 
     try:
         response = await client.chat.completions.create(
-            model="gpt-4o",
+            model=settings.groq_model,
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": user_content},

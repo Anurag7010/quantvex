@@ -138,27 +138,27 @@ export function AnimatedAIChat({
   const commandSuggestions: CommandSuggestion[] = [
     {
       icon: <TrendingUp className="w-4 h-4" />,
-      label: "Analyze Supply Chain",
-      description: "Trace semiconductor dependencies",
-      prefix: "Analyze semiconductor supply chain",
+      label: "Analyze NVDA",
+      description: "Bull/bear debate + judge verdict",
+      prefix: "Analyze NVDA",
     },
     {
       icon: <Building2 className="w-4 h-4" />,
-      label: "Company Dependencies",
-      description: "Which companies depend on Apple?",
-      prefix: "Which companies depend on Apple?",
+      label: "TSMC Dependencies",
+      description: "Which companies depend on TSMC?",
+      prefix: "Which companies depend on TSMC?",
     },
     {
       icon: <Newspaper className="w-4 h-4" />,
-      label: "Oil Disruption Impact",
-      description: "How oil affects energy stocks",
-      prefix: "What stocks are affected by oil disruption?",
+      label: "Chip Export Ban",
+      description: "Impact of US chip export ban",
+      prefix: "Impact of US chip export ban on semiconductors?",
     },
     {
       icon: <LineChart className="w-4 h-4" />,
-      label: "Stock Price",
-      description: "Get latest price for Tesla",
-      prefix: "Show latest price for Tesla",
+      label: "AAPL Price",
+      description: "Current price of Apple stock",
+      prefix: "Current price of AAPL?",
     },
   ];
 

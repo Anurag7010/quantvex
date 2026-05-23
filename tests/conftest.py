@@ -23,6 +23,14 @@ def _memgraph_reachable() -> bool:
 _MEMGRAPH_UP = _memgraph_reachable()
 
 
+@pytest.fixture(autouse=True)
+def _clear_settings_cache():
+    from mcp_server.config import get_settings
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 def pytest_collection_modifyitems(config, items):
     """
     Automatically skip any test marked @pytest.mark.integration when

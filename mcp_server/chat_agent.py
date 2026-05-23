@@ -1,5 +1,5 @@
 """
-OpenAI GPT-4o chat agent for QuantVex.
+Groq Llama-3.3 chat agent for QuantVex.
 """
 from __future__ import annotations
 
@@ -69,18 +69,25 @@ _OUT_OF_SCOPE_TERMS = frozenset(
 
 
 class QuantVexChatAgent:
-    """OpenAI GPT-4o chat agent with QuantVex MCP tool access."""
+    """Groq Llama-3.3 chat agent with QuantVex MCP tool access."""
 
     def __init__(self) -> None:
         settings = get_settings()
-        if not settings.openai_api_key:
-            raise ValueError("OPENAI_API_KEY not configured")
+        if not settings.groq_api_key:
+            raise ValueError("GROQ_API_KEY not configured")
 
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
-        self.model = "gpt-4o"
+        self.client = AsyncOpenAI(
+            api_key=settings.groq_api_key,
+            base_url=settings.groq_base_url,
+        )
+        self.model = settings.groq_model
         self.conversation_history: list[dict[str, Any]] = []
         self._tools = self._build_tools()
         self._system_prompt = self._build_system_prompt()
+
+    @property
+    def tools(self) -> list[dict[str, Any]]:
+        return self._tools
 
     def _build_tools(self) -> list[dict[str, Any]]:
         """Build OpenAI-compatible function tool declarations."""

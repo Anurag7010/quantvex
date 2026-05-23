@@ -14,9 +14,6 @@ websockets==12.0
 # Redis
 redis==5.0.1
 
-# Qdrant Vector DB
-qdrant-client==1.7.0
-
 # Memgraph / Neo4j driver (supply-chain graph, Bolt protocol)
 neo4j>=5.14.0
 
@@ -26,15 +23,6 @@ yfinance>=0.2.40
 # Causal analysis
 statsmodels>=0.14.0
 scipy>=1.12.0
-
-# Sentence Transformers for embeddings (pinned compatible versions)
-sentence-transformers==2.7.0
-torch==2.2.0
-transformers==4.40.0
-
-# LangChain
-langchain==0.1.20
-langchain-core==0.1.52
 
 # OpenAI GPT
 openai==1.40.6
