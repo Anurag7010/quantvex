@@ -461,15 +461,18 @@ async def health_check():
 
 
 @app.post("/admin/seed")
-async def seed_graph(api_key: str = Security(get_api_key)):
+async def seed_graph(request: Request, api_key: str = Security(get_api_key)):
     """One-shot endpoint to seed the Neo4j graph from the server side."""
     import sys, os
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-    debug = {
-        "NEO4J_URI": os.environ.get("NEO4J_URI", "NOT SET"),
-        "MEMGRAPH_USER": os.environ.get("MEMGRAPH_USER", "NOT SET"),
-        "MEMGRAPH_PASSWORD_SET": bool(os.environ.get("MEMGRAPH_PASSWORD")),
-    }
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    neo4j_uri = body.get("uri") or os.environ.get("NEO4J_URI", "")
+    neo4j_user = body.get("user") or os.environ.get("MEMGRAPH_USER", "neo4j")
+    neo4j_password = body.get("password") or os.environ.get("MEMGRAPH_PASSWORD", "")
     try:
         from scripts.seed_production_data import (
             create_companies, create_commodities, create_depends_on_edges,
@@ -477,7 +480,8 @@ async def seed_graph(api_key: str = Security(get_api_key)):
         )
         from finance_mcp.graph.client import GraphClient
         results = {}
-        with GraphClient() as client:
+        with GraphClient(user=neo4j_user, password=neo4j_password) as client:
+            client._uri = neo4j_uri
             create_companies(client)
             results["companies"] = "ok"
             create_commodities(client)
@@ -488,9 +492,9 @@ async def seed_graph(api_key: str = Security(get_api_key)):
             results["requires"] = "ok"
             create_historical_events(client)
             results["events"] = "ok"
-        return JSONResponse(content={"status": "seeded", "results": results, "debug": debug})
+        return JSONResponse(content={"status": "seeded", "results": results})
     except Exception as exc:
-        return JSONResponse(content={"status": "error", "error": str(exc), "debug": debug}, status_code=500)
+        return JSONResponse(content={"status": "error", "error": str(exc)}, status_code=500)
 
 
 async def _run_edge_calibration() -> None:
