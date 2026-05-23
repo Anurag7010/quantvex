@@ -23,6 +23,7 @@ jobs:
         run: pytest tests/ -v -m "not integration"
         env:
           OPENAI_API_KEY: "test-key-not-used-in-unit-tests"
+          GROQ_API_KEY: "gsk-test-key-not-used-in-unit-tests"
           MCP_API_KEY: "test-key"
           FINNHUB_API_KEY: "demo"
           ALPHA_VANTAGE_API_KEY: "demo"

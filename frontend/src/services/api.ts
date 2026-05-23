@@ -7,7 +7,7 @@ const API_BASE_URL =
 const API_KEY = process.env.VITE_API_KEY || process.env.REACT_APP_API_KEY || '';
 
 if (!API_KEY) {
-  console.error('VITE_API_KEY is not set. API calls will fail.');
+  console.error('REACT_APP_API_KEY is not set. API calls will fail.');
 }
 
 const api = axios.create({
