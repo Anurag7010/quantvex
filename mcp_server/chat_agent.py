@@ -73,11 +73,14 @@ class QuantVexChatAgent:
 
     def __init__(self) -> None:
         settings = get_settings()
-        if not settings.openai_api_key:
-            raise ValueError("OPENAI_API_KEY not configured")
+        if not settings.groq_api_key:
+            raise ValueError("GROQ_API_KEY not configured")
 
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
-        self.model = "gpt-4o"
+        self.client = AsyncOpenAI(
+            api_key=settings.groq_api_key,
+            base_url=settings.groq_base_url,
+        )
+        self.model = settings.groq_model
         self.conversation_history: list[dict[str, Any]] = []
         self._tools = self._build_tools()
         self._system_prompt = self._build_system_prompt()

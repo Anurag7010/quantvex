@@ -73,11 +73,14 @@ async def extract_supplier_relationships(
     no relationships, or if parsing fails — never raises.
     """
     settings = get_settings()
-    if not settings.openai_api_key:
-        logger.warning("edgar_extractor: OPENAI_API_KEY not set — returning empty relationships")
+    if not settings.groq_api_key:
+        logger.warning("edgar_extractor: GROQ_API_KEY not set — returning empty relationships")
         return []
 
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = AsyncOpenAI(
+        api_key=settings.groq_api_key,
+        base_url=settings.groq_base_url,
+    )
     user_content = _USER_PROMPT.format(
         ticker=ticker,
         filing_text=filing_text[:_MAX_FILING_CHARS],
@@ -85,7 +88,7 @@ async def extract_supplier_relationships(
 
     try:
         response = await client.chat.completions.create(
-            model="gpt-4o",
+            model=settings.groq_model,
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": user_content},

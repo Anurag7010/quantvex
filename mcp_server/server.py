@@ -446,9 +446,9 @@ async def health_check():
         status_payload["status"] = "degraded"
 
     status_payload["components"]["openai"] = {
-        "status": "ok" if settings.openai_api_key else "misconfigured"
+        "status": "ok" if settings.groq_api_key else "misconfigured"
     }
-    if not settings.openai_api_key:
+    if not settings.groq_api_key:
         status_payload["status"] = "degraded"
 
     status_payload["components"]["subscriptions"] = {

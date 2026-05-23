@@ -304,7 +304,7 @@ class TestExtractSupplierRelationships:
         from finance_mcp.edgar.supplier_extractor import extract_supplier_relationships
 
         with patch("finance_mcp.edgar.supplier_extractor.get_settings") as mock_settings:
-            mock_settings.return_value.openai_api_key = ""
+            mock_settings.return_value.groq_api_key = ""
             result = await extract_supplier_relationships("some 10-K text", "AAPL")
 
         assert result == []
@@ -333,7 +333,9 @@ class TestExtractSupplierRelationships:
         mock_client.chat.completions.create = AsyncMock(return_value=mock_completion)
 
         with patch("finance_mcp.edgar.supplier_extractor.get_settings") as mock_settings:
-            mock_settings.return_value.openai_api_key = "sk-test"
+            mock_settings.return_value.groq_api_key = "gsk-test"
+            mock_settings.return_value.groq_base_url = "https://api.groq.com/openai/v1"
+            mock_settings.return_value.groq_model = "llama-3.3-70b-versatile"
             with patch("finance_mcp.edgar.supplier_extractor.AsyncOpenAI", return_value=mock_client):
                 result = await extract_supplier_relationships("filing text", "AAPL")
 
@@ -366,7 +368,9 @@ class TestExtractSupplierRelationships:
         mock_client.chat.completions.create = AsyncMock(return_value=mock_completion)
 
         with patch("finance_mcp.edgar.supplier_extractor.get_settings") as mock_settings:
-            mock_settings.return_value.openai_api_key = "sk-test"
+            mock_settings.return_value.groq_api_key = "gsk-test"
+            mock_settings.return_value.groq_base_url = "https://api.groq.com/openai/v1"
+            mock_settings.return_value.groq_model = "llama-3.3-70b-versatile"
             with patch("finance_mcp.edgar.supplier_extractor.AsyncOpenAI", return_value=mock_client):
                 result = await extract_supplier_relationships("filing text", "AAPL")
 
@@ -384,7 +388,9 @@ class TestExtractSupplierRelationships:
         mock_client.chat.completions.create = AsyncMock(return_value=mock_completion)
 
         with patch("finance_mcp.edgar.supplier_extractor.get_settings") as mock_settings:
-            mock_settings.return_value.openai_api_key = "sk-test"
+            mock_settings.return_value.groq_api_key = "gsk-test"
+            mock_settings.return_value.groq_base_url = "https://api.groq.com/openai/v1"
+            mock_settings.return_value.groq_model = "llama-3.3-70b-versatile"
             with patch("finance_mcp.edgar.supplier_extractor.AsyncOpenAI", return_value=mock_client):
                 result = await extract_supplier_relationships("filing text", "AAPL")
 
@@ -414,7 +420,9 @@ class TestExtractSupplierRelationships:
         mock_client.chat.completions.create = AsyncMock(return_value=mock_completion)
 
         with patch("finance_mcp.edgar.supplier_extractor.get_settings") as mock_settings:
-            mock_settings.return_value.openai_api_key = "sk-test"
+            mock_settings.return_value.groq_api_key = "gsk-test"
+            mock_settings.return_value.groq_base_url = "https://api.groq.com/openai/v1"
+            mock_settings.return_value.groq_model = "llama-3.3-70b-versatile"
             with patch("finance_mcp.edgar.supplier_extractor.AsyncOpenAI", return_value=mock_client):
                 result = await extract_supplier_relationships("filing text", "AAPL")
 
@@ -428,7 +436,9 @@ class TestExtractSupplierRelationships:
         mock_client.chat.completions.create = AsyncMock(side_effect=RuntimeError("API error"))
 
         with patch("finance_mcp.edgar.supplier_extractor.get_settings") as mock_settings:
-            mock_settings.return_value.openai_api_key = "sk-test"
+            mock_settings.return_value.groq_api_key = "gsk-test"
+            mock_settings.return_value.groq_base_url = "https://api.groq.com/openai/v1"
+            mock_settings.return_value.groq_model = "llama-3.3-70b-versatile"
             with patch("finance_mcp.edgar.supplier_extractor.AsyncOpenAI", return_value=mock_client):
                 result = await extract_supplier_relationships("filing text", "AAPL")
 

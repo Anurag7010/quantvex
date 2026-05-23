@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     mcp_api_key: str = "dev_key_change_in_production"
     openai_api_key: str = Field(default="", env="OPENAI_API_KEY")
     openai_model: str = "gpt-4o"
+    groq_api_key: str = Field(default="", env="GROQ_API_KEY")
+    groq_base_url: str = Field(default="https://api.groq.com/openai/v1", env="GROQ_BASE_URL")
+    groq_model: str = Field(default="llama-3.3-70b-versatile", env="GROQ_MODEL")
     usd_inr_rate: Optional[float] = Field(default=89.94, env="USD_INR_RATE")
     allowed_origins: list[str] = Field(
         default=["http://localhost:5173", "http://localhost:3000"],
