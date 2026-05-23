@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { CheckCircle, Loader2, AlertCircle } from "lucide-react";
+import { CheckCircle, Loader2 } from "lucide-react";
 import { mcpApi, SSEStep, SSEStepName, MultiAgentAnalysisData } from "../services/api";
 import { StructuredAnalysisMessage } from "./analysis";
 

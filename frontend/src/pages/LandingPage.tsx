@@ -769,6 +769,7 @@ function UseCasesSection({ onExplore }: { onExplore: () => void }) {
 }
 
 // ─── About Section ────────────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const ABOUT_PILLARS = [
   {
     title: "Open by Design",
