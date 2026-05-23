@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
+    redis_password: str = Field(default="", env="REDIS_PASSWORD")
+    redis_ssl: bool = Field(default=False, env="REDIS_SSL")
 
     qdrant_host: str = "localhost"
     qdrant_port: int = 6333
@@ -40,6 +42,7 @@ class Settings(BaseSettings):
     mcp_api_key: str = "dev_key_change_in_production"
     openai_api_key: str = Field(default="", env="OPENAI_API_KEY")
     openai_model: str = "gpt-4o"
+    neo4j_uri: str = Field(default="", env="NEO4J_URI")
     groq_api_key: str = Field(default="", env="GROQ_API_KEY")
     groq_base_url: str = Field(default="https://api.groq.com/openai/v1", env="GROQ_BASE_URL")
     groq_model: str = Field(default="llama-3.3-70b-versatile", env="GROQ_MODEL")
