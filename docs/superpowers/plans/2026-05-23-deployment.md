@@ -6,7 +6,7 @@
 
 **Architecture:** Frontend (React 19) deploys to Vercel; backend (FastAPI) deploys to Railway using a lean Docker container (~300 MB instead of the current ~3 GB). The Qdrant + sentence-transformers semantic cache is replaced by an identical-interface hash-based Redis cache. Memgraph is replaced by Neo4j AuraDB (free, Bolt-compatible) via a one-line URI override in GraphClient.
 
-**Tech Stack:** Vercel (frontend CDN), Railway (backend container), Upstash Redis (TLS, free tier), Neo4j AuraDB Free (graph DB), GitHub Actions (CI gate on PRs).
+**Tech Stack:** Vercel (frontend CDN), Railway (backend container), Upstash Redis (TLS, free tier), Neo4j AuraDB Free (graph DB), Groq (free LLM API, OpenAI-SDK-compatible), GitHub Actions (CI gate on PRs).
 
 ---
 
@@ -14,8 +14,10 @@
 
 | File | Action | What changes |
 |---|---|---|
+| `mcp_server/config.py` | Modify | Add `groq_api_key`, `redis_password`, `redis_ssl`, `neo4j_uri` fields |
+| `mcp_server/chat_agent.py` | Modify | Use Groq base URL + `llama-3.3-70b-versatile` model |
+| `src/finance_mcp/edgar/supplier_extractor.py` | Modify | Use Groq base URL + `llama-3.3-70b-versatile` model |
 | `requirements.txt` | Modify | Remove torch, sentence-transformers, transformers, langchain, langchain-core, qdrant-client |
-| `mcp_server/config.py` | Modify | Add `redis_password`, `redis_ssl`, `neo4j_uri` fields |
 | `cache/redis_client.py` | Modify | Pass `password` and `ssl` kwargs to `redis.Redis()` |
 | `cache/qdrant_client.py` | Rewrite | Replace with hash-based Redis cache, same public interface |
 | `tests/test_semantic_cache.py` | Create | Unit tests for the new hash cache (mocked Redis) |
@@ -23,6 +25,170 @@
 | `.github/workflows/ci.yml` | Create | Run unit tests on every PR to main |
 | `frontend/.env.example` | Modify | Add `REACT_APP_API_URL` and `REACT_APP_API_KEY` |
 | `README.md` | Modify | Add live demo badge, update cache description |
+
+---
+
+## Task 0: Migrate from OpenAI GPT-4o to Groq (free tier)
+
+**Files:**
+- Modify: `mcp_server/config.py`
+- Modify: `mcp_server/chat_agent.py`
+- Modify: `src/finance_mcp/edgar/supplier_extractor.py`
+
+**Why Groq:** Groq provides a free API tier (no credit card) with an OpenAI-SDK-compatible endpoint. Model `llama-3.3-70b-versatile` supports function/tool calling and JSON mode — the two features QuantVex depends on. The `openai` Python package is reused unchanged; only the `base_url` and model name change.
+
+**Get your free API key:** Sign up at [console.groq.com](https://console.groq.com), create an API key — it's instant and free.
+
+- [ ] **Step 1: Add `groq_api_key` field to config.py**
+
+In `mcp_server/config.py`, after the `openai_model: str = "gpt-4o"` line, add:
+
+```python
+    groq_api_key: str = Field(default="", env="GROQ_API_KEY")
+    groq_base_url: str = Field(default="https://api.groq.com/openai/v1", env="GROQ_BASE_URL")
+    groq_model: str = Field(default="llama-3.3-70b-versatile", env="GROQ_MODEL")
+```
+
+- [ ] **Step 2: Write a test for the new config fields**
+
+Append to `tests/test_config_fields.py` (create it if it doesn't exist yet):
+
+```python
+def test_groq_api_key_defaults_empty():
+    from mcp_server.config import Settings
+    s = Settings()
+    assert s.groq_api_key == ""
+
+def test_groq_model_default():
+    from mcp_server.config import Settings
+    s = Settings()
+    assert s.groq_model == "llama-3.3-70b-versatile"
+
+def test_groq_api_key_reads_from_env():
+    import os
+    from mcp_server.config import Settings
+    from unittest.mock import patch
+    with patch.dict(os.environ, {"GROQ_API_KEY": "gsk_test123"}):
+        s = Settings()
+        assert s.groq_api_key == "gsk_test123"
+```
+
+Run:
+
+```bash
+source .venv/bin/activate && PYTHONPATH=. pytest tests/test_config_fields.py -v
+```
+
+Expected: all tests PASS (the new ones confirm the fields exist and are readable).
+
+- [ ] **Step 3: Update chat_agent.py to use Groq**
+
+In `mcp_server/chat_agent.py`, find the `__init__` method (around lines 74–82). Replace:
+
+```python
+    def __init__(self) -> None:
+        settings = get_settings()
+        if not settings.openai_api_key:
+            raise ValueError("OPENAI_API_KEY not configured")
+
+        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
+        self.model = "gpt-4o"
+        self.conversation_history: list[dict[str, Any]] = []
+        self._tools = self._build_tools()
+        self._system_prompt = self._build_system_prompt()
+```
+
+With:
+
+```python
+    def __init__(self) -> None:
+        settings = get_settings()
+        if not settings.groq_api_key:
+            raise ValueError("GROQ_API_KEY not configured")
+
+        self.client = AsyncOpenAI(
+            api_key=settings.groq_api_key,
+            base_url=settings.groq_base_url,
+        )
+        self.model = settings.groq_model
+        self.conversation_history: list[dict[str, Any]] = []
+        self._tools = self._build_tools()
+        self._system_prompt = self._build_system_prompt()
+```
+
+- [ ] **Step 4: Update supplier_extractor.py to use Groq**
+
+In `src/finance_mcp/edgar/supplier_extractor.py`, find the function that creates the OpenAI client (around lines 75–88). Replace:
+
+```python
+    settings = get_settings()
+    if not settings.openai_api_key:
+        logger.warning("edgar_extractor: OPENAI_API_KEY not set — returning empty relationships")
+        return []
+
+    client = AsyncOpenAI(api_key=settings.openai_api_key)
+```
+
+With:
+
+```python
+    settings = get_settings()
+    if not settings.groq_api_key:
+        logger.warning("edgar_extractor: GROQ_API_KEY not set — returning empty relationships")
+        return []
+
+    client = AsyncOpenAI(
+        api_key=settings.groq_api_key,
+        base_url=settings.groq_base_url,
+    )
+```
+
+And replace the model name on the `client.chat.completions.create(...)` call:
+
+```python
+            model=settings.groq_model,
+```
+
+(was `model="gpt-4o"`)
+
+- [ ] **Step 5: Update server.py health check for the new key name**
+
+In `mcp_server/server.py`, find this block (around line 448):
+
+```python
+    status_payload["components"]["openai"] = {
+        "status": "ok" if settings.openai_api_key else "misconfigured"
+    }
+    if not settings.openai_api_key:
+        status_payload["status"] = "degraded"
+```
+
+Replace with:
+
+```python
+    status_payload["components"]["openai"] = {
+        "status": "ok" if settings.groq_api_key else "misconfigured"
+    }
+    if not settings.groq_api_key:
+        status_payload["status"] = "degraded"
+```
+
+- [ ] **Step 6: Run unit tests to confirm nothing is broken**
+
+```bash
+source .venv/bin/activate && PYTHONPATH=.:src pytest tests/ -v -m "not integration"
+```
+
+Expected: all non-integration tests PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add mcp_server/config.py mcp_server/chat_agent.py \
+        src/finance_mcp/edgar/supplier_extractor.py \
+        mcp_server/server.py tests/test_config_fields.py
+git commit -m "feat: migrate from OpenAI GPT-4o to Groq free-tier API"
+```
 
 ---
 
@@ -832,6 +998,7 @@ git push origin main
 
 | Spec requirement | Task that implements it |
 |---|---|
+| Replace paid OpenAI with free Groq API | Task 0 |
 | Remove torch/sentence-transformers/qdrant-client | Task 1 |
 | Add redis_password + redis_ssl to config | Task 2 |
 | Redis client uses password + SSL | Task 3 |
