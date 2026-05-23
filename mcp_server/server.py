@@ -460,6 +460,34 @@ async def health_check():
     return JSONResponse(content=status_payload, status_code=http_status)
 
 
+@app.post("/admin/seed")
+async def seed_graph(api_key: str = Security(verify_api_key)):
+    """One-shot endpoint to seed the Neo4j graph from the server side."""
+    import sys, os
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+    try:
+        from scripts.seed_production_data import (
+            create_companies, create_commodities, create_depends_on_edges,
+            create_requires_edges, create_historical_events,
+        )
+        from finance_mcp.graph.client import GraphClient
+        results = {}
+        with GraphClient() as client:
+            create_companies(client)
+            results["companies"] = "ok"
+            create_commodities(client)
+            results["commodities"] = "ok"
+            create_depends_on_edges(client)
+            results["depends_on"] = "ok"
+            create_requires_edges(client)
+            results["requires"] = "ok"
+            create_historical_events(client)
+            results["events"] = "ok"
+        return JSONResponse(content={"status": "seeded", "results": results})
+    except Exception as exc:
+        return JSONResponse(content={"status": "error", "error": str(exc)}, status_code=500)
+
+
 async def _run_edge_calibration() -> None:
     """Background task: calibrate causal betas on all DEPENDS_ON edges."""
     from finance_mcp.causal.calibrator import calibrate_all_edges
