@@ -1,5 +1,5 @@
 """
-OpenAI GPT-4o chat agent for QuantVex.
+Groq Llama-3.3 chat agent for QuantVex.
 """
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ _OUT_OF_SCOPE_TERMS = frozenset(
 
 
 class QuantVexChatAgent:
-    """OpenAI GPT-4o chat agent with QuantVex MCP tool access."""
+    """Groq Llama-3.3 chat agent with QuantVex MCP tool access."""
 
     def __init__(self) -> None:
         settings = get_settings()

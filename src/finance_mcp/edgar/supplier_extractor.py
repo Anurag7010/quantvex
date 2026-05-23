@@ -1,7 +1,7 @@
 """
 finance_mcp.edgar.supplier_extractor
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-GPT-4o extraction of supplier / customer relationships from 10-K filing text.
+Groq Llama-3.3 extraction of supplier / customer relationships from 10-K filing text.
 
 Public API
 ----------
@@ -22,7 +22,7 @@ from mcp_server.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-_MAX_FILING_CHARS = 12_000  # cap before sending to GPT (~3 000 tokens)
+_MAX_FILING_CHARS = 12_000  # cap before sending to Groq (~3 000 tokens)
 
 _SYSTEM_PROMPT = (
     "You are a financial analyst specialised in supply chain risk. "
@@ -67,9 +67,9 @@ async def extract_supplier_relationships(
     ticker: str,
 ) -> List[SupplierRelationship]:
     """
-    Call GPT-4o to extract named supplier/customer relationships from 10-K text.
+    Call Groq Llama-3.3 to extract named supplier/customer relationships from 10-K text.
 
-    Returns an empty list if the OpenAI key is absent, if the model returns
+    Returns an empty list if the Groq key is absent, if the model returns
     no relationships, or if parsing fails — never raises.
     """
     settings = get_settings()
