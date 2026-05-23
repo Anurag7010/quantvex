@@ -461,7 +461,7 @@ async def health_check():
 
 
 @app.post("/admin/seed")
-async def seed_graph(api_key: str = Security(verify_api_key)):
+async def seed_graph(api_key: str = Security(get_api_key)):
     """One-shot endpoint to seed the Neo4j graph from the server side."""
     import sys, os
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
