@@ -110,7 +110,8 @@ class GraphClient:
         user: str = AGENT_USER,
         password: str = AGENT_PASSWORD,
     ) -> None:
-        self._uri = f"bolt://{host}:{port}"
+        neo4j_uri = os.environ.get("NEO4J_URI", "")
+        self._uri = neo4j_uri if neo4j_uri else f"bolt://{host}:{port}"
         self._user = user
         self._password = password
         self._driver: Optional[Driver] = None
