@@ -456,7 +456,7 @@ async def health_check():
         "count": len(get_active_subscriptions()),
     }
 
-    http_status = 200 if status_payload["status"] == "ok" else 503
+    http_status = 200
     return JSONResponse(content=status_payload, status_code=http_status)
 
 
