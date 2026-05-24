@@ -391,9 +391,9 @@ async def chat(request: ChatRequest):
 
         lower_error = error_msg.lower()
         if "429" in error_msg or "quota" in lower_error or "rate limit" in lower_error:
-            error_msg = "The OpenAI API quota or rate limit has been exceeded. Please try again shortly or check your billing settings."
+            error_msg = "The Groq API quota or rate limit has been exceeded. Please try again shortly or check your billing settings."
         elif "401" in error_msg or "authentication" in lower_error or "incorrect api key" in lower_error:
-            error_msg = "Invalid OpenAI API key. Please check your configuration."
+            error_msg = "Invalid Groq API key. Please check your configuration."
         elif "GROQ_API_KEY" in error_msg:
             error_msg = "Groq API key not configured. Please add GROQ_API_KEY to your environment settings."
         

@@ -11,7 +11,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-4.9-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
-[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o-412991?style=flat-square&logo=openai&logoColor=white)](https://openai.com)
+[![Groq](https://img.shields.io/badge/Groq-Llama--3.3--70b-F55036?style=flat-square&logo=groq&logoColor=white)](https://groq.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
 </div>
@@ -25,8 +25,8 @@ QuantVex is a full-stack financial intelligence platform that combines real-time
 Unlike generic AI assistants, every QuantVex response is grounded in real tool calls — live quotes from market APIs, graph traversals over a supply chain knowledge graph, and freshly fetched news — never unverified LLM speculation.
 
 ```
-User query → GPT-4o selects tool → tool executes against live data/graph/news
-           → structured result → GPT-4o formats response → frontend renders cards
+User query → Groq Llama-3.3-70b selects tool → tool executes against live data/graph/news
+           → structured result → Groq formats response → frontend renders cards
 ```
 
 ---
@@ -50,7 +50,7 @@ User query → GPT-4o selects tool → tool executes against live data/graph/new
 **SEC EDGAR Integration**
 
 - Fetches the most recent 10-K filing for any US-listed company
-- GPT-4o extracts named supplier/customer relationships from Business and Risk Factors sections
+- Groq LLM extracts named supplier/customer relationships from Business and Risk Factors sections
 - Writes relationships to the graph as DEPENDS_ON edges tagged `source='EDGAR'`
 
 **Live News Ingestion & Impact Analysis**
@@ -70,7 +70,7 @@ User query → GPT-4o selects tool → tool executes against live data/graph/new
 
 **AI Chat Interface**
 
-- GPT-4o with strict domain guardrails — finance only, no off-topic answers
+- Groq Llama-3.3-70b with strict domain guardrails — finance only, no off-topic answers
 - Full conversation history with 20-turn rolling context window
 - Deterministic tool routing: the model cannot answer news questions from memory
 
@@ -79,8 +79,8 @@ User query → GPT-4o selects tool → tool executes against live data/graph/new
 | Service | URL |
 |---|---|
 | Frontend | [quantvex.vercel.app](https://quantvex.vercel.app) |
-| API (Swagger) | [quantvex-api.up.railway.app/docs](https://quantvex-api.up.railway.app/docs) |
-| MCP Manifest | [quantvex-api.up.railway.app/.well-known/mcp](https://quantvex-api.up.railway.app/.well-known/mcp) |
+| API (Swagger) | [quantvex-api-zpai.onrender.com/docs](https://quantvex-api-zpai.onrender.com/docs) |
+| MCP Manifest | [quantvex-api-zpai.onrender.com/.well-known/mcp](https://quantvex-api-zpai.onrender.com/.well-known/mcp) |
 
 ---
 
@@ -95,7 +95,7 @@ User query → GPT-4o selects tool → tool executes against live data/graph/new
 ┌────────────────────────▼────────────────────────────────────┐
 │                    FastAPI MCP Server (v2.0)                  │
 │  /chat · /invoke · /stream/analysis · /health · /verdicts    │
-│                   GPT-4o Chat Agent                          │
+│              Groq Llama-3.3-70b Chat Agent                   │
 │         Tool routing · Conversation history · Guardrails     │
 └──┬──────────────┬───────────────┬──────────────┬────────────┘
    │              │               │              │
@@ -122,7 +122,7 @@ Binance WS     20 commodities EventIngestor  Judge Agent
 
 | Layer              | Technology                                                  |
 | ------------------ | ----------------------------------------------------------- |
-| AI Reasoning       | OpenAI GPT-4o (function calling)                            |
+| AI Reasoning       | Groq Llama-3.3-70b-versatile (function calling)             |
 | Backend            | FastAPI 0.104, Python 3.11, Uvicorn                         |
 | Supply Chain Graph | Memgraph (Bolt/Cypher, neo4j Python driver)                 |
 | Semantic Cache     | Qdrant + sentence-transformers (all-MiniLM-L6-v2)           |
@@ -141,9 +141,9 @@ Binance WS     20 commodities EventIngestor  Judge Agent
 
 ```
 quantvex/
-├── mcp_server/                 # FastAPI server + GPT-4o chat agent
+├── mcp_server/                 # FastAPI server + Groq chat agent
 │   ├── server.py               # All HTTP endpoints
-│   ├── chat_agent.py           # GPT-4o agent with tool calling
+│   ├── chat_agent.py           # Groq Llama-3.3-70b agent with tool calling
 │   ├── capabilities.json       # MCP tool catalog
 │   ├── schemas.py              # Pydantic request/response models
 │   ├── config.py               # Env-driven settings (pydantic-settings)
@@ -173,7 +173,7 @@ quantvex/
 │   │   └── schemas.py          # Agent I/O contracts
 │   ├── edgar/                  # SEC EDGAR integration
 │   │   ├── edgar_client.py     # EDGAR HTTP client (CIK lookup + 10-K fetch)
-│   │   ├── supplier_extractor.py # GPT-4o relationship extraction
+│   │   ├── supplier_extractor.py # Groq LLM relationship extraction
 │   │   └── graph_updater.py    # Writes DEPENDS_ON edges to graph
 │   ├── causal/                 # Causal beta calibration
 │   │   ├── price_fetcher.py    # yfinance price history download
@@ -199,7 +199,7 @@ quantvex/
 │
 ├── frontend/                   # React application
 │   └── src/
-│       ├── pages/              # HomePage · ChatPage · DashboardPage
+│       ├── pages/              # LandingPage · ChatPage · DashboardPage
 │       ├── components/
 │       │   ├── analysis/       # VerdictCard · BullCaseCard · BearCaseCard
 │       │   └── ui/             # AnimatedHero · AnimatedAIChat · FocusRail
@@ -207,7 +207,8 @@ quantvex/
 │
 ├── tests/                      # Unit + integration tests
 ├── scripts/                    # Ops scripts
-│   ├── seed_production_data.py # Seeds full S&P 50 + commodities graph
+│   ├── seed_production_data.py # Seeds full S&P 50 + commodities graph (Bolt)
+│   ├── seed_via_http.py        # Seeds graph via HTTP REST (cloud/AuraDB)
 │   ├── verify_system.py        # System health verification
 │   └── e2e_pipeline.py         # End-to-end smoke test
 │
@@ -228,7 +229,7 @@ QuantVex exposes six tools through its Model Context Protocol server:
 | `trace_impact`         | Multi-hop supply chain traversal — finds all downstream companies exposed to a disruption |
 | `analyze_news_impact`  | Fetch live news → parse events → write to graph → return cascade impact                   |
 | `multi_agent_analysis` | Run concurrent bull/bear reasoning and return a judge verdict                             |
-| `edgar_refresh`        | Fetch SEC 10-K → extract suppliers via GPT-4o → update graph edges                       |
+| `edgar_refresh`        | Fetch SEC 10-K → extract suppliers via Groq LLM → update graph edges                     |
 
 ---
 
@@ -241,7 +242,7 @@ All endpoints require `X-API-Key` header except `/health` and `/.well-known/mcp`
 | `GET`  | `/.well-known/mcp`         | MCP discovery metadata                        |
 | `GET`  | `/capabilities`            | Full tool catalog with schemas                |
 | `POST` | `/invoke`                  | Execute any MCP tool by name                  |
-| `POST` | `/chat`                    | GPT-4o conversational interface               |
+| `POST` | `/chat`                    | Groq Llama-3.3-70b conversational interface   |
 | `GET`  | `/stream/analysis`         | SSE stream of multi-agent reasoning steps     |
 | `POST` | `/subscribe`               | Subscribe to a live price stream              |
 | `POST` | `/unsubscribe`             | Cancel a stream subscription                  |
@@ -313,7 +314,7 @@ curl -X POST http://localhost:8000/invoke \
 - Python 3.11+
 - Node.js 18+
 - Docker and Docker Compose
-- API keys: OpenAI, Finnhub, Alpha Vantage, NewsData.io
+- API keys: Groq, Finnhub, Alpha Vantage, NewsData.io
 
 ### 1. Clone the repository
 
@@ -332,7 +333,7 @@ Edit `.env` and fill in all required values:
 
 ```env
 # Required
-OPENAI_API_KEY=sk-...
+GROQ_API_KEY=gsk_...
 MCP_API_KEY=your-secret-key
 
 # Market data
@@ -516,7 +517,7 @@ pytest tests/ --cov=mcp_server --cov=src/finance_mcp --cov-report=term-missing
 - CORS restricted to configured `ALLOWED_ORIGINS` — no wildcard in production
 - All graph queries use parameterised Cypher — no string interpolation of user input
 - EDGAR URLs are constructed from structured fields (CIK, accession number) — no SSRF surface
-- GPT-4o output from EDGAR extraction is JSON-parsed and field-validated before graph write
+- LLM output from EDGAR extraction is JSON-parsed and field-validated before graph write
 - Frontend API key loaded from environment variable, never hardcoded
 
 ---
@@ -525,7 +526,7 @@ pytest tests/ --cov=mcp_server --cov=src/finance_mcp --cov-report=term-missing
 
 | Variable                | Required | Description                       |
 | ----------------------- | -------- | --------------------------------- |
-| `OPENAI_API_KEY`        | ✅       | GPT-4o API key                    |
+| `GROQ_API_KEY`          | ✅       | Groq API key (Llama-3.3-70b)      |
 | `MCP_API_KEY`           | ✅       | Server authentication key         |
 | `FINNHUB_API_KEY`       | ✅       | Finnhub market data               |
 | `ALPHA_VANTAGE_API_KEY` | ✅       | Alpha Vantage market data         |
@@ -546,7 +547,7 @@ pytest tests/ --cov=mcp_server --cov=src/finance_mcp --cov-report=term-missing
 | Script                            | Purpose                                                                                          |
 | --------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `scripts/seed_production_data.py` | Seeds full S&P 50 company/commodity graph. Safe to re-run (idempotent). Supports `--dry-run`.    |
-| `scripts/verify_system.py`        | Checks all service connections, graph health, handler registration, and GPT-4o access.           |
+| `scripts/verify_system.py`        | Checks all service connections, graph health, and handler registration.                           |
 | `scripts/e2e_pipeline.py`         | Full end-to-end smoke test: news fetch → graph ingest → trace → multi-agent.                     |
 
 ---
@@ -559,7 +560,7 @@ pytest tests/ --cov=mcp_server --cov=src/finance_mcp --cov-report=term-missing
 2. Implement handler in `mcp_server/invoke_handlers/`
 3. Export from `mcp_server/invoke_handlers/__init__.py`
 4. Add dispatch branch in `mcp_server/server.py` `/invoke` handler
-5. Add GPT-4o function declaration and `_execute_tool` mapping in `mcp_server/chat_agent.py`
+5. Add function declaration and `_execute_tool` mapping in `mcp_server/chat_agent.py`
 6. Add tests in `tests/`
 
 ### Adding a new data source

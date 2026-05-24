@@ -59,7 +59,7 @@ def check(label: str, fn: Callable) -> bool:
 # ===========================================================================
 # 1. Memgraph connection
 # ===========================================================================
-def check_nebula_connection():
+def check_memgraph_connection():
     _section("1. Memgraph Connection")
     from mcp_server.config import get_settings
     from finance_mcp.graph.client import GraphClient
@@ -316,7 +316,7 @@ def main():
 
     t0 = time.time()
 
-    check_nebula_connection()
+    check_memgraph_connection()
     check_graph_data()
     check_news_pipeline()
     check_mcp_handlers()

@@ -34,7 +34,7 @@
 
 ### Abstract
 
-QuantVex is a full-stack financial intelligence system that grounds every AI-generated market analysis in live, verifiable tool-call data. The platform exposes a Model Context Protocol (MCP) server — built on FastAPI and backed by OpenAI GPT-4o — that integrates real-time market data connectors, a Memgraph supply chain knowledge graph, SEC EDGAR filing extraction, a live news ingestion pipeline, and an adversarial multi-agent investment reasoning engine. When a user poses a financial question, GPT-4o deterministically routes the query through one or more of six specialised MCP tools before formulating a response, ensuring that claims about current prices, supply chain dependencies, SEC-disclosed supplier relationships, and market-moving news are derived from live data rather than from the model's training-time knowledge. The system further supports real-time Server-Sent Events (SSE) streaming of the adversarial debate transcript, and persists every investment verdict to a SQLite store for longitudinal accuracy tracking. The frontend is a React 19 / TypeScript application rendering structured analysis as visual cards. QuantVex addresses the reliability gap that exists when general-purpose LLMs are applied directly to finance: every factual claim is auditable, every data source is cited, and every verdict is accuracy-checked against future price movement.
+QuantVex is a full-stack financial intelligence system that grounds every AI-generated market analysis in live, verifiable tool-call data. The platform exposes a Model Context Protocol (MCP) server — built on FastAPI and backed by Groq Llama-3.3-70b — that integrates real-time market data connectors, a Memgraph supply chain knowledge graph, SEC EDGAR filing extraction, a live news ingestion pipeline, and an adversarial multi-agent investment reasoning engine. When a user poses a financial question, Groq Llama-3.3-70b deterministically routes the query through one or more of six specialised MCP tools before formulating a response, ensuring that claims about current prices, supply chain dependencies, SEC-disclosed supplier relationships, and market-moving news are derived from live data rather than from the model's training-time knowledge. The system further supports real-time Server-Sent Events (SSE) streaming of the adversarial debate transcript, and persists every investment verdict to a SQLite store for longitudinal accuracy tracking. The frontend is a React 19 / TypeScript application rendering structured analysis as visual cards. QuantVex addresses the reliability gap that exists when general-purpose LLMs are applied directly to finance: every factual claim is auditable, every data source is cited, and every verdict is accuracy-checked against future price movement.
 
 ---
 
@@ -62,7 +62,7 @@ QuantVex is organised into five tiers: a React frontend, a FastAPI MCP server, a
 
 The **frontend tier** is a React 19 / TypeScript single-page application that communicates with the backend exclusively over HTTPS with an `X-API-Key` header. It renders structured analysis as component cards (VerdictCard, BullCaseCard, BearCaseCard, MarketDataCard) and supports a real-time streaming view via the EventSource API connected to the SSE endpoint.
 
-The **FastAPI MCP server** (`mcp_server/server.py`) is the system's entry point and enforcement boundary. It implements all fourteen HTTP endpoints, enforces API key authentication, applies a **60-request-per-60-second** in-memory rate limit using a per-key deque, and routes incoming requests to the appropriate handler. The server also hosts a GPT-4o chat agent (`mcp_server/chat_agent.py`) that maintains a **20-turn** rolling conversation history and enforces domain guardrails through a structured system prompt and a pre-LLM keyword filter.
+The **FastAPI MCP server** (`mcp_server/server.py`) is the system's entry point and enforcement boundary. It implements all fourteen HTTP endpoints, enforces API key authentication, applies a **60-request-per-60-second** in-memory rate limit using a per-key deque, and routes incoming requests to the appropriate handler. The server also hosts a Groq Llama-3.3-70b chat agent (`mcp_server/chat_agent.py`) that maintains a **20-turn** rolling conversation history and enforces domain guardrails through a structured system prompt and a pre-LLM keyword filter.
 
 The **domain engines** are divided into six subsystems: (1) market data connectors (`connectors/`), (2) supply chain graph client (`src/finance_mcp/graph/`), (3) causal beta calibrator (`src/finance_mcp/causal/`), (4) SEC EDGAR integration (`src/finance_mcp/edgar/`), (5) news ingestion and event propagation pipeline (`src/finance_mcp/news/` + `ingestion/`), and (6) multi-agent investment reasoning (`src/finance_mcp/reasoning/`).
 
@@ -76,8 +76,8 @@ The end-to-end data flow for a typical investment analysis query proceeds as fol
 
 1. The user submits a message via the React chat interface. The frontend sends a `POST /chat` request with an `X-API-Key` header.
 2. The FastAPI server validates the API key and checks the rate limit bucket for that key.
-3. The `QuantVexChatAgent.chat()` method prepends the system prompt and the last 20 conversation turns, then calls the OpenAI Chat Completions API with `tool_choice="auto"` and **temperature 0.1**.
-4. GPT-4o evaluates the query against the tool routing rules in the system prompt and returns one or more tool calls (e.g., `trace_supply_chain_impact` + `analyze_news_impact`).
+3. The `QuantVexChatAgent.chat()` method prepends the system prompt and the last 20 conversation turns, then calls the Groq Chat Completions API (OpenAI-compatible) with `tool_choice="auto"` and **temperature 0.1**.
+4. Groq Llama-3.3-70b evaluates the query against the tool routing rules in the system prompt and returns one or more tool calls (e.g., `trace_supply_chain_impact` + `analyze_news_impact`).
 5. The server executes each tool call sequentially via `_execute_tool()`, which dispatches to the appropriate MCP invoke handler.
 6. Each handler checks the Qdrant semantic cache; on a miss, it calls the Memgraph graph client, live market APIs, or the NewsData.io adapter as appropriate.
 7. Tool results are appended to the conversation as `role: tool` messages and a second LLM call is made with `temperature 0.1` and `max_tokens 4096` to produce the final prose response.
@@ -148,10 +148,10 @@ After calibration, three fields are written back to each DEPENDS_ON edge in Memg
 1. **Ticker validation:** The ticker is checked against `^[A-Za-z0-9_.\-]{1,64}$`. Non-US tickers (TSMC, Samsung, ASML) that are absent from the SEC registry return a clear error.
 2. **CIK resolution:** `get_cik()` resolves the ticker to a zero-padded 10-digit CIK by querying the EDGAR company tickers JSON (`/files/company_tickers.json`). Results are cached in a module-level `_CIK_CACHE` dict to avoid re-downloading the ~600 KB file.
 3. **10-K fetch:** `fetch_10k_filing()` retrieves the most recent 10-K filing's Business and Risk Factors sections (combined ≤ **24,000 characters**, **12,000 per section**) via EDGAR's XBRL submissions API. The `_MIN_DELAY = 0.12s` inter-request pause respects EDGAR's 10 req/sec fair-access policy.
-4. **GPT-4o extraction:** `extract_supplier_relationships()` sends the truncated filing text to GPT-4o with `temperature=0.0` and `response_format={"type": "json_object"}`. The structured output lists each named supplier or customer with fields: `supplier_ticker`, `supplier_name`, `relationship_type`, `dependency_strength` (0.0–1.0), and `evidence_quote` (verbatim, ≤120 chars).
+4. **Groq Llama-3.3-70b extraction:** `extract_supplier_relationships()` sends the truncated filing text to Groq Llama-3.3-70b with `temperature=0.0` and `response_format={"type": "json_object"}`. The structured output lists each named supplier or customer with fields: `supplier_ticker`, `supplier_name`, `relationship_type`, `dependency_strength` (0.0–1.0), and `evidence_quote` (verbatim, ≤120 chars).
 5. **Graph write-back:** `update_graph_from_filing()` calls `GraphClient.insert_company()` for any newly discovered company and `insert_depends_on()` for each relationship, tagging edges with `source='EDGAR'` and `filing_date`.
 
-**Key design choices:** EDGAR URLs are constructed from structured CIK and accession number fields, never from user input, eliminating SSRF surface. GPT-4o output is fully JSON-parsed and field-validated (type checks, length caps, self-reference exclusion) before any graph write occurs.
+**Key design choices:** EDGAR URLs are constructed from structured CIK and accession number fields, never from user input, eliminating SSRF surface. Groq Llama-3.3-70b output is fully JSON-parsed and field-validated (type checks, length caps, self-reference exclusion) before any graph write occurs.
 
 ### 4.5 Live News Ingestion & Event Propagation
 
@@ -205,13 +205,13 @@ The **Redis snapshot cache** stores serialised `QuoteData` objects keyed by `sna
 
 ### 4.9 AI Chat Interface
 
-**Purpose:** Provide a conversational interface backed by GPT-4o with strict finance-domain guardrails, deterministic tool routing, and graceful degradation when tools are unavailable.
+**Purpose:** Provide a conversational interface backed by Groq Llama-3.3-70b with strict finance-domain guardrails, deterministic tool routing, and graceful degradation when tools are unavailable.
 
 **Internal operation:** The `QuantVexChatAgent` (`mcp_server/chat_agent.py`) maintains a rolling `conversation_history` list capped at **20 turns**. On each `chat()` call, it prepends the system prompt and the last 20 turns to the messages array. A pre-LLM keyword filter (`_is_clearly_out_of_scope`) checks for out-of-scope terms (e.g., "football", "recipe", "coding") and for absence of any finance terms from a 80-term whitelist; queries that fail this check receive a canned refusal without an LLM call.
 
 The system prompt enforces six mandatory tool-routing rules: company/ticker mentioned → `trace_supply_chain_impact`; news/current events → `analyze_news_impact`; current price → `get_stock_quote`; investment thesis → `multi_agent_analysis`; EDGAR/10-K → `edgar_refresh`; combinations are explicitly specified. Tool failures are suppressed from the user-facing response: the agent prompt instructs the model to never open with an apology for a tool failure and to always produce a complete answer from training knowledge if all tools fail.
 
-The agent exposes **5 GPT-4o function declarations** (the `quote.stream` tool is not exposed to the chat agent as it is a subscription mechanism rather than a query tool).
+The agent exposes **5 Groq Llama-3.3-70b function declarations** (the `quote.stream` tool is not exposed to the chat agent as it is a subscription mechanism rather than a query tool).
 
 ---
 
@@ -219,7 +219,7 @@ The agent exposes **5 GPT-4o function declarations** (the `quote.stream` tool is
 
 | Layer | Technology | Version | Role | Why Chosen |
 |---|---|---|---|---|
-| AI Model | OpenAI GPT-4o | Latest | Function calling, EDGAR extraction, chat | Best-in-class function calling reliability; structured JSON output mode |
+| AI Model | Groq Llama-3.3-70b | Latest | Function calling, EDGAR extraction, chat | Best-in-class function calling reliability; structured JSON output mode |
 | Backend Framework | FastAPI | 0.104 | HTTP server, routing, validation | Async-native, Pydantic integration, OpenAPI docs out of box |
 | Runtime | Python | 3.11 | Entire backend | AsyncIO maturity, ecosystem breadth, type hints |
 | Graph Database | Memgraph | Latest | Supply chain knowledge graph | Bolt/Cypher compatible, faster than Neo4j for in-memory workloads |
@@ -302,8 +302,8 @@ The agent exposes **5 GPT-4o function declarations** (the `quote.stream` tool is
 |---|---|
 | **Input parameters** | `ticker` (string, required; must be SEC-registered) |
 | **Output fields** | `ticker`, `filing_date`, `relationships_found`, `new_edges_added`, `updated_edges`, `companies_discovered`, `errors` |
-| **Execution path** | CIK resolution (cached) → EDGAR submissions API → 10-K text fetch → GPT-4o extraction (temp=0.0, JSON mode) → field validation → `GraphClient.insert_depends_on()` per relationship |
-| **Typical latency** | 5–15s (EDGAR network + GPT-4o call) |
+| **Execution path** | CIK resolution (cached) → EDGAR submissions API → 10-K text fetch → Groq Llama-3.3-70b extraction (temp=0.0, JSON mode) → field validation → `GraphClient.insert_depends_on()` per relationship |
+| **Typical latency** | 5–15s (EDGAR network + Groq Llama-3.3-70b call) |
 | **Agents using it** | Chat agent; direct API via `/invoke` |
 
 ---
@@ -325,7 +325,7 @@ Each unique API key is allocated a sliding-window bucket (implemented as a `coll
 | `GET` | `/.well-known/mcp` | None | — | MCP metadata JSON | MCP protocol discovery |
 | `GET` | `/capabilities` | None | — | Full tool catalog JSON | Tool schema discovery |
 | `POST` | `/invoke` | Required | `{tool_name, arguments, agent_id?, query_text?}` | `ToolResponse` | Execute any MCP tool |
-| `POST` | `/chat` | Required | `{message}` | `{response, success, error?}` | GPT-4o conversational interface |
+| `POST` | `/chat` | Required | `{message}` | `{response, success, error?}` | Groq Llama-3.3-70b conversational interface |
 | `GET` | `/stream/analysis` | Query param `api_key` | — | SSE stream | Real-time multi-agent reasoning |
 | `POST` | `/subscribe` | Required | `{symbol, channel, agent_id?}` | `ToolResponse` | Subscribe to price stream |
 | `POST` | `/unsubscribe` | Required | `{subscription_id}` | `ToolResponse` | Cancel stream subscription |
@@ -534,7 +534,7 @@ The following table consolidates all hard numbers extracted directly from the co
 | | Qdrant vector dimensions | **384** | `qdrant_client.py: VECTOR_SIZE` |
 | | Redis market indices TTL | **300 seconds** | `server.py: /market/indices` |
 | | Redis crypto quote TTL | **30 seconds** | `server.py: /market/crypto/{symbol}` |
-| | GPT-4o context window | **20 turns** | `chat_agent.py: _history_window()` |
+| | Groq Llama-3.3-70b context window | **20 turns** | `chat_agent.py: _history_window()` |
 | **API Rate Limits** | Finnhub free tier | **60 calls/minute** | `connectors/finnhub.py: docstring` |
 | | Finnhub min interval | **1.0 second** | `connectors/finnhub.py: _min_interval` |
 | | Alpha Vantage free tier | **5 calls/minute** (500/day) | `connectors/alpha_vantage.py: docstring` |
@@ -592,9 +592,9 @@ All Memgraph queries in `GraphClient` use the neo4j Python driver's parameterise
 
 EDGAR fetch URLs are constructed exclusively from structured fields: the CIK (a resolved 10-digit integer) and the accession number (a formatted string from the EDGAR submissions API). Neither field originates from user-controlled free-text. The ticker, which does originate from user input, is only used to look up the CIK from the EDGAR company tickers index — it is never embedded into a URL.
 
-### GPT-4o Output Validation Before Graph Writes
+### Groq Llama-3.3-70b Output Validation Before Graph Writes
 
-The EDGAR extractor calls GPT-4o with `response_format={"type": "json_object"}` to enforce structured output. The returned JSON is parsed with `json.loads` and each item is field-validated: `supplier_ticker` is truncated to 64 characters and uppercased; `supplier_name` is truncated to 256 characters; `relationship_type` must be exactly `"supplier"` or `"customer"`; `dependency_strength` is clamped to `[0.0, 1.0]`; `evidence_quote` is truncated to 200 characters. Items where the supplier ticker equals the queried company's ticker are excluded (self-reference guard). Any item failing validation is silently skipped rather than causing a graph write error.
+The EDGAR extractor calls Groq Llama-3.3-70b with `response_format={"type": "json_object"}` to enforce structured output. The returned JSON is parsed with `json.loads` and each item is field-validated: `supplier_ticker` is truncated to 64 characters and uppercased; `supplier_name` is truncated to 256 characters; `relationship_type` must be exactly `"supplier"` or `"customer"`; `dependency_strength` is clamped to `[0.0, 1.0]`; `evidence_quote` is truncated to 200 characters. Items where the supplier ticker equals the queried company's ticker are excluded (self-reference guard). Any item failing validation is silently skipped rather than causing a graph write error.
 
 ---
 
@@ -617,7 +617,7 @@ Memgraph connectivity is tested lazily on first graph request rather than at sta
 - **Redis:** `RedisClient.is_connected()` → `PING` command
 - **Memgraph:** `GraphClient(host, port).__enter__()` + `client.ping()` → `RETURN 1 AS ok`
 - **Qdrant:** `SemanticCacheClient.health()` → `get_collections()`
-- **OpenAI:** Presence of `settings.openai_api_key` (key presence only; no API call made)
+- **Groq:** Presence of `settings.groq_api_key` (key presence only; no API call made)
 
 The response includes a `components` map with per-service `{status, error?}` objects and a top-level `status` field that is `"ok"` only if all four pass, `"degraded"` otherwise. HTTP 503 is returned when degraded.
 
@@ -644,16 +644,16 @@ The response includes a `components` map with per-service `{status, error?}` obj
 
 **Market data API constraints.** The Finnhub free tier permits 60 requests per minute; the Alpha Vantage free tier permits only 5 per minute with a 500-per-day ceiling. Heavy concurrent usage will exhaust these quotas, falling back to cached data or returning errors. Production deployment would require paid API tiers.
 
-**LLM extraction accuracy for EDGAR relationships.** GPT-4o extracts supplier/customer relationships from 10-K text with `temperature=0.0`, but accuracy depends on the specificity of the filing language. Companies that describe suppliers in vague terms ("leading semiconductor manufacturer") without naming them will produce no extracted relationships. The evidence quote validation (120-char cap) provides an auditability signal but does not guarantee accuracy.
+**LLM extraction accuracy for EDGAR relationships.** Groq Llama-3.3-70b extracts supplier/customer relationships from 10-K text with `temperature=0.0`, but accuracy depends on the specificity of the filing language. Companies that describe suppliers in vague terms ("leading semiconductor manufacturer") without naming them will produce no extracted relationships. The evidence quote validation (120-char cap) provides an auditability signal but does not guarantee accuracy.
 
 **Verdict accuracy evaluation lag.** The 5-day and 30-day accuracy windows use calendar-day sleep durations (`5 × 86,400 seconds`) rather than actual trading calendar days. This introduces minor measurement error around weekends and market holidays. The 2% directional threshold is conservative and may understate accuracy for high-conviction verdicts on volatile instruments.
 
-**LLM non-determinism.** While `temperature=0.1` is used for the chat agent and `temperature=0.0` for EDGAR extraction, GPT-4o responses retain some non-determinism at these settings. The judge and rebuttal are fully deterministic, but bull and bear reasoning strings vary across runs for the same inputs.
+**LLM non-determinism.** While `temperature=0.1` is used for the chat agent and `temperature=0.0` for EDGAR extraction, Groq Llama-3.3-70b responses retain some non-determinism at these settings. The judge and rebuttal are fully deterministic, but bull and bear reasoning strings vary across runs for the same inputs.
 
 ### Potential Enhancements
 
 - **Expanded graph coverage:** Integration of additional data sources (FactSet, Refinitiv supply chain data) to extend beyond S&P 50.
-- **Alternative LLMs:** Anthropic Claude or open-weight models for EDGAR extraction to reduce OpenAI API dependency.
+- **Alternative LLMs:** Anthropic Claude or other open-weight models as a drop-in replacement for EDGAR extraction.
 - **Real-time graph updates:** Streaming EDGAR 8-K filings (current reports) via EDGAR's EDGAR Full-Text Search API for intraday graph updates.
 - **Options market data:** Implied volatility and put/call ratio integration as additional signals for the bear agent.
 - **Expanded causal model:** Multivariate VAR models to capture inter-sector contagion, beyond pairwise OLS.
@@ -686,7 +686,7 @@ The response includes a `components` map with per-service `{status, error?}` obj
 
 | Service | Role | Documentation |
 |---|---|---|
-| OpenAI GPT-4o | Chat agent, EDGAR extraction, multi-agent reasoning | https://platform.openai.com/docs |
+| Groq Llama-3.3-70b | Chat agent, EDGAR extraction, multi-agent reasoning | https://console.groq.com/docs |
 | Finnhub | Primary equity quote provider | https://finnhub.io/docs/api |
 | Alpha Vantage | Fallback equity quote provider | https://www.alphavantage.co/documentation/ |
 | Binance REST & WebSocket | Cryptocurrency quotes and streams | https://binance-docs.github.io/apidocs/spot/en/ |
@@ -701,7 +701,7 @@ The response includes a `components` map with per-service `{status, error?}` obj
 |---|---|---|
 | FastAPI | 0.104 | HTTP server framework |
 | Pydantic / pydantic-settings | 2.x | Data validation, settings management |
-| openai | 1.x | GPT-4o API client (async) |
+| openai | 1.x | OpenAI-compatible SDK (used with Groq base URL) |
 | neo4j | 5.x | Memgraph Bolt driver |
 | httpx | — | Async HTTP client for connectors |
 | aiohttp | — | Async HTTP client for market index endpoints |
