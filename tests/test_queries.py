@@ -14,9 +14,10 @@ Run unit tests only (no docker required)::
 """
 
 import socket
+
 import pytest
 
-from finance_mcp.graph.client import GraphClient, _validate_vid, _validate_str
+from finance_mcp.graph.client import GraphClient, _validate_str, _validate_vid
 
 _MEMGRAPH_HOST = "127.0.0.1"
 _MEMGRAPH_PORT = 7687

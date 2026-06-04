@@ -7,13 +7,23 @@ Usage:
         --password IU-KwWM9jH2sHluMoDVOq3fVSP6uIYjh0ZRKjDNPaZU
 """
 from __future__ import annotations
-import argparse, json, sys
+
+import argparse
+import base64
+import json
+import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
-import urllib.request, urllib.error, base64
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from scripts.seed_production_data import (
-    COMPANIES, COMMODITIES, DEPENDS_ON_EDGES, REQUIRES_EDGES, HISTORICAL_EVENTS, SEVERITY_SCORE
+    COMMODITIES,
+    COMPANIES,
+    DEPENDS_ON_EDGES,
+    HISTORICAL_EVENTS,
+    REQUIRES_EDGES,
+    SEVERITY_SCORE,
 )
 
 

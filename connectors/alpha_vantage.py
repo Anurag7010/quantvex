@@ -2,17 +2,19 @@
 Alpha Vantage REST Connector
 Free tier - rate limited to 5 calls/minute
 """
-import httpx
 import asyncio
 import inspect
 import time
-from typing import Optional
 from datetime import datetime
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from mcp_server.config import get_settings
-from mcp_server.utils.logging import get_logger
-from mcp_server.schemas import QuoteData, DataSource
+from typing import Optional
+
+import httpx
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
 from connectors.exceptions import RateLimitError
+from mcp_server.config import get_settings
+from mcp_server.schemas import DataSource, QuoteData
+from mcp_server.utils.logging import get_logger
 
 logger = get_logger(__name__)
 

@@ -1,30 +1,60 @@
+# CI pipeline for QuantVex.
+# Runs on every push and PR to main: lint → test → coverage gate → artifact upload.
+
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
 jobs:
   test:
+    name: Lint & Test (Python 3.11)
     runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v4
+    env:
+      # No .env file in CI — pydantic-settings uses field defaults.
+      # MCP_API_KEY is intentionally unset so it defaults to the same value
+      # used by the test suite ("dev_key_change_in_production").
+      FINNHUB_API_KEY: "demo"
+      ALPHA_VANTAGE_API_KEY: "demo"
+      PYTHONPATH: ".:src"
 
-      - uses: actions/setup-python@v5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install --upgrade pip
+          pip install ruff
+          pip install -r requirements.txt
 
-      - name: Run unit tests
-        run: pytest tests/ -v -m "not integration"
-        env:
-          OPENAI_API_KEY: "test-key-not-used-in-unit-tests"
-          GROQ_API_KEY: "gsk-test-key-not-used-in-unit-tests"
-          MCP_API_KEY: "test-key"
-          FINNHUB_API_KEY: "demo"
-          ALPHA_VANTAGE_API_KEY: "demo"
-          PYTHONPATH: ".:src"
+      - name: Lint with ruff
+        run: ruff check .
+
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ -v \
+            -m "not integration and not live" \
+            --cov=mcp_server \
+            --cov=src/finance_mcp \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=40
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 30

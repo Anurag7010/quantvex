@@ -1,14 +1,15 @@
 
 import json
-import time
 import ssl
+import time
 from collections import defaultdict, deque
-from pathlib import Path
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import aiohttp
+
 try:
     import certifi
 except Exception:  # pragma: no cover
@@ -19,23 +20,24 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 
+from cache.qdrant_client import get_semantic_cache
+from cache.redis_client import get_redis_client
+from finance_mcp.graph.client import GraphClient
 from mcp_server.config import get_settings
-from mcp_server.utils.logging import setup_logging, get_logger
-from mcp_server.schemas import ToolInvocation, ToolResponse, SubscriptionRequest
 from mcp_server.invoke_handlers import (
+    get_active_subscriptions,
+    handle_edgar_refresh,
+    handle_multi_agent_analysis,
+    handle_news_analysis,
     handle_quote_latest,
     handle_quote_stream,
-    handle_unsubscribe,
-    get_active_subscriptions,
     handle_trace_impact,
-    handle_news_analysis,
-    handle_multi_agent_analysis,
-    handle_edgar_refresh,
+    handle_unsubscribe,
     run_streaming_analysis,
 )
-from cache.redis_client import get_redis_client
-from cache.qdrant_client import get_semantic_cache
-from finance_mcp.graph.client import GraphClient
+from mcp_server.observability import metrics
+from mcp_server.schemas import SubscriptionRequest, ToolInvocation, ToolResponse
+from mcp_server.utils.logging import get_logger, setup_logging
 
 try:
     from mcp_server.chat_agent import get_chat_agent
@@ -207,30 +209,31 @@ async def get_capabilities():
 @app.post("/invoke", dependencies=[Security(get_api_key)])
 async def invoke_tool(request: ToolInvocation):
     """Execute an MCP tool. Requires X-API-Key header."""
+    invoke_start = time.time()
     logger.info(
         "invoke_request",
         tool=request.tool_name,
-        args=request.arguments
+        args=request.arguments,
     )
-    
+
     try:
         tool_name = request.tool_name.lower()
         args = request.arguments
-        
+
         if tool_name == "quote.latest":
             response = await handle_quote_latest(
                 symbol=args.get("symbol"),
                 exchange=args.get("exchange"),
                 max_age_sec=args.get("maxAgeSec"),
                 agent_id=request.agent_id,
-                query_text=request.query_text
+                query_text=request.query_text,
             )
-        
+
         elif tool_name == "quote.stream":
             response = await handle_quote_stream(
                 symbol=args.get("symbol"),
                 channel=args.get("channel", "trades"),
-                agent_id=request.agent_id
+                agent_id=request.agent_id,
             )
 
         elif tool_name == "trace_impact":
@@ -269,25 +272,43 @@ async def invoke_tool(request: ToolInvocation):
                     f"Unknown tool: {tool_name}. Available tools: quote.latest, "
                     "quote.stream, trace_impact, analyze_news_impact, "
                     "multi_agent_analysis, edgar_refresh"
-                )
+                ),
             )
-        
+
+        # Record metrics for every tool call
+        latency_ms = (time.time() - invoke_start) * 1000
+        cache_hit = getattr(response, "cache_hit", False) or False
+        cache_type = None
+        if cache_hit and response.data_source:
+            src = str(response.data_source).lower()
+            cache_type = "qdrant" if "qdrant" in src or "semantic" in src else "redis"
+        metrics.record_tool_call(
+            tool=tool_name,
+            latency_ms=latency_ms,
+            cache_hit=bool(cache_hit),
+            error=response.error if not response.success else None,
+            cache_type=cache_type,
+        )
+
         if response.success:
             return JSONResponse(content=response.model_dump())
         else:
-            return JSONResponse(
-                status_code=400,
-                content=response.model_dump()
-            )
-            
+            return JSONResponse(status_code=400, content=response.model_dump())
+
     except Exception as e:
+        latency_ms = (time.time() - invoke_start) * 1000
+        metrics.record_tool_call(
+            tool=request.tool_name.lower(),
+            latency_ms=latency_ms,
+            error=str(e),
+        )
         logger.error("invoke_error", error=str(e))
         return JSONResponse(
             status_code=500,
             content=ToolResponse(
                 success=False,
-                error=f"Internal error: {str(e)}"
-            ).model_dump()
+                error=f"Internal error: {str(e)}",
+            ).model_dump(),
         )
 
 
@@ -460,10 +481,17 @@ async def health_check():
     return JSONResponse(content=status_payload, status_code=http_status)
 
 
+@app.get("/metrics", dependencies=[Security(get_api_key)])
+async def get_metrics():
+    """Return in-memory runtime metrics: request counts, latency, cache hits, token usage."""
+    return JSONResponse(content=metrics.snapshot())
+
+
 @app.post("/admin/seed")
 async def seed_graph(request: Request, api_key: str = Security(get_api_key)):
     """One-shot endpoint to seed the Neo4j graph from the server side."""
-    import sys, os
+    import os
+    import sys
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
     body = {}
     try:
@@ -475,11 +503,15 @@ async def seed_graph(request: Request, api_key: str = Security(get_api_key)):
     neo4j_password = body.get("password") or os.environ.get("MEMGRAPH_PASSWORD", "")
     try:
         from neo4j import GraphDatabase
-        from scripts.seed_production_data import (
-            create_companies, create_commodities, create_depends_on_edges,
-            create_requires_edges, create_historical_events,
-        )
+
         from finance_mcp.graph.client import GraphClient
+        from scripts.seed_production_data import (
+            create_commodities,
+            create_companies,
+            create_depends_on_edges,
+            create_historical_events,
+            create_requires_edges,
+        )
 
         # Create driver directly — bypass GraphClient env-var defaults
         driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
@@ -671,7 +703,7 @@ async def get_market_indices():
                 if r.status == 200:
                     data = await r.json()
                     result["usd_inr"] = round(data["rates"]["INR"], 2)
-        except Exception as e:
+        except Exception:
             result["usd_inr"] = None
 
     result["timestamp"] = datetime.utcnow().isoformat()

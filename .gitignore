@@ -59,5 +59,7 @@ docker/certs/*
 !docker/certs/.gitkeep
 infra/.env
 frontend/.env
+scripts/benchmark_results.json
+evals/results/
 
 paper/

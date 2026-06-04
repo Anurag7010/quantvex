@@ -14,8 +14,7 @@ import asyncio
 import os
 import sys
 import time
-import traceback
-from typing import Callable, List, Tuple
+from typing import Callable, List
 
 # Ensure src/ is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -61,8 +60,8 @@ def check(label: str, fn: Callable) -> bool:
 # ===========================================================================
 def check_memgraph_connection():
     _section("1. Memgraph Connection")
-    from mcp_server.config import get_settings
     from finance_mcp.graph.client import GraphClient
+    from mcp_server.config import get_settings
     s = get_settings()
 
     def _connect():
@@ -77,8 +76,8 @@ def check_memgraph_connection():
 # ===========================================================================
 def check_graph_data():
     _section("2. Graph Schema & Seed Data")
-    from mcp_server.config import get_settings
     from finance_mcp.graph.client import GraphClient
+    from mcp_server.config import get_settings
     s = get_settings()
 
     with GraphClient(host=s.memgraph_host, port=s.memgraph_port) as c:
@@ -140,8 +139,8 @@ def check_graph_data():
 # ===========================================================================
 def check_news_pipeline():
     _section("3. News Pipeline")
-    from mcp_server.config import get_settings
     from finance_mcp.news.news_client import NewsClient
+    from mcp_server.config import get_settings
 
     s = get_settings()
 
@@ -159,9 +158,10 @@ def check_news_pipeline():
         # Zero articles is OK (quota exhausted or no results) — just don't crash.
 
     def _event_parser():
+        from datetime import datetime, timezone
+
         from finance_mcp.news.event_parser import EventParser
         from finance_mcp.news.news_client import NewsArticle
-        from datetime import datetime, timezone
         parser = EventParser()
         dummy = NewsArticle(
             title="TSMC halts EUV production after factory fire",
@@ -171,7 +171,7 @@ def check_news_pipeline():
             source_name="TestSource",
             query="semiconductor supply disruption",
         )
-        events = parser.parse_articles([dummy])
+        parser.parse_articles([dummy])
         # Parser may return 0 events for dummy data — just verify no crash
 
     check("NEWS_API_KEY is set", _news_key_configured)
@@ -187,7 +187,6 @@ def check_mcp_handlers():
 
     async def _run_handlers():
         from mcp_server.invoke_handlers.trace_impact import handle_trace_impact
-        from mcp_server.invoke_handlers.news_analysis import handle_news_analysis
 
         # --- trace_impact ---
         result = await handle_trace_impact(ticker="TSMC", max_hops=2, agent_id="verify")
@@ -294,7 +293,8 @@ def check_gpt_agent():
 # ===========================================================================
 def check_http_endpoint():
     _section("6. Server Health Endpoint")
-    import urllib.request, urllib.error
+    import urllib.error
+    import urllib.request
 
     def _health():
         try:

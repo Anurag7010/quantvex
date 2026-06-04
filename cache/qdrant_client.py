@@ -7,7 +7,7 @@ Public interface is identical so all callers (server.py, quote_latest.py) requir
 import hashlib
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from mcp_server.config import get_settings
 from mcp_server.utils.logging import get_logger

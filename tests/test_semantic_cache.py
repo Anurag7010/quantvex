@@ -1,7 +1,6 @@
 """Unit tests for the hash-based semantic cache (cache/qdrant_client.py)."""
 import json
 from unittest.mock import MagicMock
-import pytest
 
 
 def _make_client(mock_redis):

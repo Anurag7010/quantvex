@@ -2,7 +2,9 @@
 Logging Configuration
 """
 import logging
+
 import structlog
+
 from mcp_server.config import get_settings
 
 

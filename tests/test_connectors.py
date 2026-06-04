@@ -1,15 +1,15 @@
 """
 Tests for Financial Data Connectors
 """
-import pytest
-import pytest_asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from connectors.alpha_vantage import AlphaVantageConnector
-from connectors.finnhub import FinnhubConnector
 from connectors.binance_ws import BinanceWebSocketConnector
-from mcp_server.schemas import QuoteData, StreamTick, DataSource
+from connectors.finnhub import FinnhubConnector
+from mcp_server.schemas import DataSource, QuoteData, StreamTick
 
 
 class TestAlphaVantageConnector:

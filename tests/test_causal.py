@@ -10,8 +10,6 @@ Covers:
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
-from typing import List
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
@@ -145,7 +143,7 @@ class TestComputeEdgeBeta:
 
     def test_returns_calibration_on_sufficient_data(self):
         """Returns EdgeCalibration when series are long enough."""
-        from finance_mcp.causal.beta_calculator import compute_edge_beta, EdgeCalibration
+        from finance_mcp.causal.beta_calculator import EdgeCalibration, compute_edge_beta
 
         upstream = _make_prices(300)
         downstream = _make_correlated_prices(upstream, lag=3, beta=0.6)
@@ -275,8 +273,8 @@ class TestCalibrator:
 
     def test_updates_edges_with_calibration(self):
         """update_edge_causal is called for each successfully calibrated edge."""
-        from finance_mcp.causal.calibrator import calibrate_all_edges
         from finance_mcp.causal.beta_calculator import EdgeCalibration
+        from finance_mcp.causal.calibrator import calibrate_all_edges
 
         upstream_df = _make_prices(350)
         downstream_df = _make_correlated_prices(upstream_df, lag=3, beta=0.6)
@@ -520,6 +518,7 @@ class TestCalibrateEdgesEndpoint:
     def test_calibrate_edges_returns_started(self):
         """Endpoint returns 200 with status=started immediately."""
         from fastapi.testclient import TestClient
+
         from mcp_server.server import app
 
         with TestClient(app, headers={"X-API-Key": "dev_key_change_in_production"}) as client:
@@ -534,6 +533,7 @@ class TestCalibrateEdgesEndpoint:
     def test_calibrate_edges_requires_api_key(self):
         """Endpoint rejects requests without X-API-Key header."""
         from fastapi.testclient import TestClient
+
         from mcp_server.server import app
 
         with TestClient(app) as client:

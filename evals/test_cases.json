@@ -1,0 +1,177 @@
+[
+  {
+    "id": "tc_001",
+    "query": "Should I buy NVDA right now?",
+    "ticker": "NVDA",
+    "expected_direction": "bullish",
+    "rationale": "NVDA has dominant AI chip market share, strong data-center revenue growth, and H100/H200 demand backlog extending into 2025"
+  },
+  {
+    "id": "tc_002",
+    "query": "Is MSFT a good investment given its Azure cloud momentum?",
+    "ticker": "MSFT",
+    "expected_direction": "bullish",
+    "rationale": "Azure growing 28-30% YoY, Copilot monetisation underway, enterprise software moat"
+  },
+  {
+    "id": "tc_003",
+    "query": "Should I buy AAPL considering its strong ecosystem and services growth?",
+    "ticker": "AAPL",
+    "expected_direction": "bullish",
+    "rationale": "Services segment (App Store, iCloud, AppleCare) growing faster than hardware; high switching costs; $90B+ annual buybacks"
+  },
+  {
+    "id": "tc_004",
+    "query": "What is the outlook for AMZN given AWS and retail recovery?",
+    "ticker": "AMZN",
+    "expected_direction": "bullish",
+    "rationale": "AWS re-accelerating to 17% YoY growth; retail margin expansion; advertising revenue doubling every two years"
+  },
+  {
+    "id": "tc_005",
+    "query": "Is GOOGL a buy given its AI integration into search and cloud?",
+    "ticker": "GOOGL",
+    "expected_direction": "bullish",
+    "rationale": "Search monopoly reinforced by Gemini integration; Google Cloud growing 28% YoY; YouTube Shorts monetisation"
+  },
+  {
+    "id": "tc_006",
+    "query": "Should I invest in META considering its ad revenue rebound and Llama AI?",
+    "ticker": "META",
+    "expected_direction": "bullish",
+    "rationale": "Ad targeting recovered post-ATT changes; AI Advantage driving 30% CPM improvement; monetisation of WhatsApp and Threads"
+  },
+  {
+    "id": "tc_007",
+    "query": "Is V a good long-term investment given the cashless economy trend?",
+    "ticker": "V",
+    "expected_direction": "bullish",
+    "rationale": "Global payment volume growing 8-10% annually; 60%+ operating margin; dividend grower with 15-year track record"
+  },
+  {
+    "id": "tc_008",
+    "query": "Should I buy JPM given rising interest income and strong investment banking?",
+    "ticker": "JPM",
+    "expected_direction": "bullish",
+    "rationale": "Net interest income at record highs; fortress balance sheet; diversified revenue across retail, IB, and asset management"
+  },
+  {
+    "id": "tc_009",
+    "query": "What is the investment case for BRK-B given Buffett's cash position?",
+    "ticker": "BRK-B",
+    "expected_direction": "bullish",
+    "rationale": "Record $150B+ cash ready for deployment; insurance float compounding; diversified non-cyclical portfolio"
+  },
+  {
+    "id": "tc_010",
+    "query": "Is LLY a strong buy given GLP-1 obesity drug dominance?",
+    "ticker": "LLY",
+    "expected_direction": "bullish",
+    "rationale": "Tirzepatide (Mounjaro/Zepbound) peak revenue estimated at $30B+; first mover in obesity + diabetes dual-action market"
+  },
+  {
+    "id": "tc_011",
+    "query": "Should I short INTC given its manufacturing delays and market share loss?",
+    "ticker": "INTC",
+    "expected_direction": "bearish",
+    "rationale": "Intel lost 20+ percentage points of server CPU share to AMD; fab turnaround unproven; dividend cut; negative FCF"
+  },
+  {
+    "id": "tc_012",
+    "query": "Is PARA a sell given cord-cutting and streaming losses?",
+    "ticker": "PARA",
+    "expected_direction": "bearish",
+    "rationale": "Linear TV revenue declining 8% annually; Paramount+ losing $1B+ per year; balance sheet stressed; M&A uncertainty"
+  },
+  {
+    "id": "tc_013",
+    "query": "What is the risk of holding MPW given healthcare REIT distress?",
+    "ticker": "MPW",
+    "expected_direction": "bearish",
+    "rationale": "Steward Health tenant bankruptcy; rent deferrals; $700M in non-paying leases; dividend suspended"
+  },
+  {
+    "id": "tc_014",
+    "query": "Should I sell PFE given its post-COVID revenue cliff?",
+    "ticker": "PFE",
+    "expected_direction": "bearish",
+    "rationale": "COVID vaccine and Paxlovid revenue collapsed 70% YoY; Comirnaty write-downs; pipeline not enough to offset losses"
+  },
+  {
+    "id": "tc_015",
+    "query": "Is BYND a bearish bet given plant-based food demand collapse?",
+    "ticker": "BYND",
+    "expected_direction": "bearish",
+    "rationale": "Revenue fell 40% over two years; going-concern warning; repeated equity dilution; consumer trends reversed"
+  },
+  {
+    "id": "tc_016",
+    "query": "What is the outlook for WBA given pharmacy reimbursement pressure?",
+    "ticker": "WBA",
+    "expected_direction": "bearish",
+    "rationale": "Pharmacy margin compression; opioid litigation settlements; store closures accelerating; dividend cut 50%"
+  },
+  {
+    "id": "tc_017",
+    "query": "Should I sell DIS given theme park costs and streaming losses?",
+    "ticker": "DIS",
+    "expected_direction": "bearish",
+    "rationale": "Disney+ losing $2B+ per year at peak; ESPN linear decline; Bob Iger returning to reverse strategic drift; elevated debt"
+  },
+  {
+    "id": "tc_018",
+    "query": "Is TSLA fairly valued right now given competition from BYD?",
+    "ticker": "TSLA",
+    "expected_direction": "neutral",
+    "rationale": "Strong brand and energy storage growth, but margin pressure from price cuts and growing BYD competition make this genuinely contested"
+  },
+  {
+    "id": "tc_019",
+    "query": "What should I do with AMD given its AI chip growth versus competition?",
+    "ticker": "AMD",
+    "expected_direction": "neutral",
+    "rationale": "MI300X gaining datacenter traction, but NVDA dominance and Intel competitive response create a balanced risk/reward"
+  },
+  {
+    "id": "tc_020",
+    "query": "Is BABA worth buying given China's regulatory environment and recovery?",
+    "ticker": "BABA",
+    "expected_direction": "neutral",
+    "rationale": "Deep value on FCF basis, but geopolitical risk, VIE structure, and regulatory unpredictability offset growth potential"
+  },
+  {
+    "id": "tc_021",
+    "query": "Should I hold or sell PYPL given fintech competition?",
+    "ticker": "PYPL",
+    "expected_direction": "neutral",
+    "rationale": "New CEO cutting costs and showing margin improvement, but Apple Pay and Square competition create unclear medium-term path"
+  },
+  {
+    "id": "tc_022",
+    "query": "What is the risk-reward on NFLX at current valuations?",
+    "ticker": "NFLX",
+    "expected_direction": "neutral",
+    "rationale": "Password sharing crackdown added 20M+ subscribers, but high content spend and 30x earnings multiple price in much of the recovery"
+  },
+  {
+    "id": "tc_023",
+    "query": "Is XOM a buy or hold given oil price uncertainty?",
+    "ticker": "XOM",
+    "expected_direction": "neutral",
+    "rationale": "Pioneer acquisition adds 1M boe/day capacity, but Brent crude range-bound at $75-85 creates modest upside"
+  },
+  {
+    "id": "tc_024",
+    "query": "What happens to QCOM if Apple designs out its chips?",
+    "ticker": "QCOM",
+    "expected_direction": "bearish",
+    "rationale": "AAPL designed in-house modem chips; Qualcomm loses ~$8B/yr in iPhone modem revenue by 2026 — headwind not priced in"
+  },
+  {
+    "id": "tc_025",
+    "query": "Is CRM worth buying given enterprise AI spending on Salesforce Einstein?",
+    "ticker": "CRM",
+    "expected_direction": "bullish",
+    "rationale": "Einstein GPT and Agentforce driving attach rates; $50B ARR milestone reachable; customer retention above 90%"
+  }
+]

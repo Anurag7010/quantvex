@@ -15,8 +15,8 @@ and the teardown deletes it.
 """
 
 import socket
-import pytest
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Connectivity helper
@@ -154,7 +154,6 @@ class TestVidValidation:
             c.fetch_company("A" * 65)
 
     def test_valid_ticker_passes_validation(self):
-        from finance_mcp.graph.client import GraphClient
         from finance_mcp.graph.client import _validate_vid
         _validate_vid("AAPL", "ticker")  # no exception
         _validate_vid("TSM", "ticker")

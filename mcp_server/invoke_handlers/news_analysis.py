@@ -26,11 +26,11 @@ from __future__ import annotations
 import time
 from typing import Dict, List, Optional
 
+from finance_mcp.graph.client import GraphClient
+from finance_mcp.ingestion.pipeline import run_news_ingestion_pipeline
 from mcp_server.config import get_settings
 from mcp_server.schemas import ToolResponse
 from mcp_server.utils.logging import get_logger
-from finance_mcp.graph.client import GraphClient
-from finance_mcp.ingestion.pipeline import run_news_ingestion_pipeline
 
 logger = get_logger(__name__)
 

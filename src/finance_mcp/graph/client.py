@@ -44,7 +44,7 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 
-from neo4j import GraphDatabase, Driver
+from neo4j import Driver, GraphDatabase
 
 logger = logging.getLogger(__name__)
 

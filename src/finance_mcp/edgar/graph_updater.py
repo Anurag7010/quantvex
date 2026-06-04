@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from typing import List
 
 from finance_mcp.edgar.supplier_extractor import SupplierRelationship
-from finance_mcp.graph.client import GraphClient, DEFAULT_HOST, DEFAULT_PORT
+from finance_mcp.graph.client import DEFAULT_HOST, DEFAULT_PORT, GraphClient
 
 logger = logging.getLogger(__name__)
 

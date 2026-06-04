@@ -1,0 +1,31 @@
+# pyproject.toml — project metadata, ruff lint config, and pytest settings.
+# Ruff replaces flake8, isort, and pyupgrade in a single fast pass.
+
+[tool.ruff]
+line-length = 100
+exclude = [
+    ".venv",
+    "source",
+    "frontend",
+    "paper",
+    "__pycache__",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+markers = [
+    "integration: marks tests that require a live Memgraph instance",
+    "live: marks tests that require a live external API",
+]
+pythonpath = [".", "src"]

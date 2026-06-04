@@ -18,9 +18,9 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, List
 
-from finance_mcp.graph.client import GraphClient, DEFAULT_HOST, DEFAULT_PORT
-from finance_mcp.causal.price_fetcher import fetch_price_history
 from finance_mcp.causal.beta_calculator import compute_edge_beta
+from finance_mcp.causal.price_fetcher import fetch_price_history
+from finance_mcp.graph.client import DEFAULT_HOST, DEFAULT_PORT, GraphClient
 
 logger = logging.getLogger(__name__)
 

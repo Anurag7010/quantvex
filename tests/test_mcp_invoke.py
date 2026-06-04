@@ -1,15 +1,14 @@
 """
 Tests for MCP Server /invoke endpoint
 """
-import pytest
-import pytest_asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime
+from unittest.mock import AsyncMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
 
+from mcp_server.schemas import DataSource, QuoteData
 from mcp_server.server import app
-from mcp_server.schemas import QuoteData, DataSource
-
 
 API_KEY = "dev_key_change_in_production"
 
@@ -96,7 +95,7 @@ class TestInvokeQuoteLatest:
         response = client.post("/invoke", json=payload)
         data = response.json()
         
-        assert data["success"] == False
+        assert not data["success"]
         assert "error" in data
     
     def test_invoke_quote_latest_missing_symbol(self, client):
@@ -109,7 +108,7 @@ class TestInvokeQuoteLatest:
         response = client.post("/invoke", json=payload)
         data = response.json()
         
-        assert data["success"] == False
+        assert not data["success"]
 
 
 class TestInvokeQuoteStream:
@@ -150,7 +149,7 @@ class TestUnknownTool:
         data = response.json()
         
         assert response.status_code == 400
-        assert data["success"] == False
+        assert not data["success"]
         assert "Unknown tool" in data["error"]
 
 
@@ -195,7 +194,7 @@ class TestSubscriptionEndpoints:
         response = client.post("/unsubscribe", json=payload, headers={"X-API-Key": API_KEY})
         data = response.json()
 
-        assert data["success"] == False
+        assert not data["success"]
     
     def test_list_subscriptions(self, client):
         """Test listing subscriptions"""

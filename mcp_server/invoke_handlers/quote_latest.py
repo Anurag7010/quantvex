@@ -2,18 +2,20 @@
 Quote Latest Tool Handler
 MCP tool: quote.latest
 """
-import time
 import json
-from typing import Optional
+import time
 from datetime import datetime
-from mcp_server.utils.logging import get_logger
-from mcp_server.utils.validation import InputValidator
-from mcp_server.schemas import QuoteData, ToolResponse, DataSource
-from mcp_server.config import get_settings
-from cache.redis_client import get_redis_client
+from typing import Optional
+
 from cache.qdrant_client import get_semantic_cache
+from cache.redis_client import get_redis_client
 from connectors.alpha_vantage import get_alpha_vantage_connector
 from connectors.finnhub import get_finnhub_connector
+from mcp_server.config import get_settings
+from mcp_server.schemas import DataSource, QuoteData, ToolResponse
+from mcp_server.utils.logging import get_logger
+from mcp_server.utils.validation import InputValidator
+
 logger = get_logger(__name__)
 
 CRYPTO_SYMBOLS = {"BTC", "ETH", "BNB", "SOL", "XRP", "ADA", "DOGE", "AVAX", "DOT", "MATIC"}
@@ -193,8 +195,9 @@ async def _fetch_with_fallback(symbol: str, exchange: Optional[str] = None) -> O
 
 async def _fetch_crypto_quote_binance(symbol: str) -> Optional[QuoteData]:
     """Fetch crypto price from Binance public REST API — no key required."""
-    import httpx
     from datetime import datetime
+
+    import httpx
 
     pair = f"{symbol}USDT"
     url = f"https://api.binance.com/api/v3/ticker/24hr?symbol={pair}"

@@ -13,6 +13,7 @@ Run unit tests only (no docker required)::
 from __future__ import annotations
 
 import socket
+
 import pytest
 
 from finance_mcp.graph.client import GraphClient

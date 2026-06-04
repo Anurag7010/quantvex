@@ -1,7 +1,6 @@
 """Unit tests for GraphClient URI override via NEO4J_URI env var."""
 import os
 from unittest.mock import patch
-import pytest
 
 
 def test_graph_client_uses_bolt_by_default():

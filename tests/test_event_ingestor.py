@@ -6,13 +6,13 @@ All tests run without a live Memgraph by patching _GraphWriter.
 
 from __future__ import annotations
 
-import pytest
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from finance_mcp.ingestion.event_ingestor import EventIngestor, IngestResult, _GraphWriter
 from finance_mcp.news.event_parser import ImpactedEntity, ParsedEvent
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -25,10 +25,32 @@ _NEWS_KEYWORDS = (
     "recession",
 )
 
+# Words that signal the user is asking from a bullish/constructive framing.
+# Symmetric counterpart lives in bear_agent._BEAR_QUERY_WORDS.
+_BULL_QUERY_WORDS = frozenset(
+    {"buy", "bullish", "invest", "long", "upside", "growth",
+     "opportunity", "strong", "worth buying", "good investment", "recovery", "momentum"}
+)
+
 
 def _should_run_news(query: str) -> bool:
     query_l = query.lower()
     return any(keyword in query_l for keyword in _NEWS_KEYWORDS)
+
+
+def _query_bull_prior(query: str) -> float:
+    """Return a confidence boost (0–0.20) when the query is framed bullishly.
+
+    Symmetric with bear_agent._query_bear_prior.  Uses query framing as a
+    legitimate prior: "Should I buy X?" genuinely asks for upside validation.
+    """
+    q = query.lower()
+    bull_hits = sum(1 for w in _BULL_QUERY_WORDS if w in q)
+    # Bear framing in a bull query context reduces the bull prior.
+    from finance_mcp.reasoning.bear_agent import _BEAR_QUERY_WORDS  # noqa: PLC0415
+    bear_hits = sum(1 for w in _BEAR_QUERY_WORDS if w in q)
+    net = max(0, bull_hits - bear_hits)
+    return min(net * 0.10, 0.20)
 
 
 _QUANTITATIVE_MARKERS = ("quote is", "graph shows", "returned 0", "unavailable", "upstream")
@@ -61,7 +83,8 @@ async def run_bull_agent(agent_input: AgentInput) -> AgentOutput:
     ticker = (agent_input.ticker or "").strip().upper() or None
 
     signals: List[str] = []
-    confidence = 0.35
+    # Base + query-framing prior (symmetric with bear_agent).
+    confidence = 0.35 + _query_bull_prior(agent_input.query)
 
     if ticker:
         try:
@@ -74,7 +97,7 @@ async def run_bull_agent(agent_input: AgentInput) -> AgentOutput:
                 signals.append(
                     f"Latest {ticker} quote is {price} (source: {source}, cache={cache_hit})."
                 )
-                confidence += 0.12
+                confidence += 0.08  # reduced from 0.12 — having a price is data, not a buy signal
         except Exception as exc:  # noqa: BLE001
             logger.warning("bull_agent quote.latest failed: %s", exc)
 

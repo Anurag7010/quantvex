@@ -2,12 +2,12 @@
 Quote Stream Tool Handler
 MCP tool: quote.stream
 """
-import uuid
 from typing import Optional
+
+from connectors.binance_ws import get_binance_connector
+from mcp_server.schemas import SubscriptionResponse, ToolResponse
 from mcp_server.utils.logging import get_logger
 from mcp_server.utils.validation import InputValidator
-from mcp_server.schemas import SubscriptionRequest, SubscriptionResponse, ToolResponse
-from connectors.binance_ws import get_binance_connector
 
 logger = get_logger(__name__)
 

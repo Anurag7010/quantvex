@@ -10,8 +10,9 @@ Live integration test (requires NEWS_API_KEY in env):
 """
 from __future__ import annotations
 
-import sys
 import pathlib
+import sys
+
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "src"))
 
 from dataclasses import dataclass
@@ -19,8 +20,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from finance_mcp.news.event_parser import EventParser, ParsedEvent, ImpactedEntity
-
+from finance_mcp.news.event_parser import EventParser
 
 # ---------------------------------------------------------------------------
 # Minimal NewsArticle stub — avoids importing NewsClient (no API key needed)

@@ -20,12 +20,12 @@ import re
 import time
 from typing import Optional
 
+from finance_mcp.edgar.edgar_client import EdgarError, fetch_10k_filing
+from finance_mcp.edgar.graph_updater import update_graph_from_filing
+from finance_mcp.edgar.supplier_extractor import extract_supplier_relationships
 from mcp_server.config import get_settings
 from mcp_server.schemas import ToolResponse
 from mcp_server.utils.logging import get_logger
-from finance_mcp.edgar.edgar_client import fetch_10k_filing, EdgarError
-from finance_mcp.edgar.supplier_extractor import extract_supplier_relationships
-from finance_mcp.edgar.graph_updater import update_graph_from_filing
 
 logger = get_logger(__name__)
 

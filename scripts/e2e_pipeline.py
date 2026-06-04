@@ -189,17 +189,17 @@ async def step4_architecture_trace() -> None:
         for c in impacted[:5]:
             print(f"           {c['ticker']:10s} | {c['name']}")
     else:
-        print(f"         → (no DEPENDS_ON edges seeded yet — add via insert_company)")
+        print("         → (no DEPENDS_ON edges seeded yet — add via insert_company)")
 
     # ⑤ AI-ready output
     print(f"\n  {INFO}  [5] AI-ready reasoning output:")
-    print(f"         Supply shock detected at TSMC.")
+    print("         Supply shock detected at TSMC.")
     if impacted:
         names = ", ".join(c["ticker"] for c in impacted[:5])
         print(f"         Downstream companies at risk: {names}")
-        print(f"         Recommended action: review inventory exposure for affected suppliers.")
+        print("         Recommended action: review inventory exposure for affected suppliers.")
     else:
-        print(f"         No downstream dependency data available yet.")
+        print("         No downstream dependency data available yet.")
 
     check("architecture trace completed without error", True)
 
@@ -217,7 +217,8 @@ async def main() -> None:
         await step4_architecture_trace()
     except Exception as exc:
         print(f"\n  {FAIL}  Unexpected exception: {exc}")
-        import traceback; traceback.print_exc()
+        import traceback
+        traceback.print_exc()
         _failures.append(str(exc))
 
     print(f"\n{'='*60}")

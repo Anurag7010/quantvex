@@ -27,6 +27,7 @@ Run
 from __future__ import annotations
 
 import socket
+
 import pytest
 
 from finance_mcp.graph.client import GraphClient
@@ -199,7 +200,7 @@ class TestTraceTsmcShock:
     def test_tsmc_shock_1hop_excludes_indirect(self, client: GraphClient):
         result = client.trace_impact(_TSMC, max_hops=1)
         tickers = {r["ticker"] for r in result}
-        assert _DELL not in tickers, f"DELL_TI should be absent from 1-hop result"
+        assert _DELL not in tickers, "DELL_TI should be absent from 1-hop result"
 
     def test_tsmc_shock_2hop_finds_indirect_dependent(self, client: GraphClient):
         result = client.trace_impact(_TSMC, max_hops=2)

@@ -6,22 +6,21 @@ All network and OpenAI calls are mocked. No live EDGAR or Memgraph required.
 from __future__ import annotations
 
 import json
-import pytest
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from finance_mcp.edgar.edgar_client import (
-    _strip_html,
-    _extract_sections,
     EdgarError,
+    _extract_sections,
+    _strip_html,
 )
+from finance_mcp.edgar.graph_updater import UpdateResult
 from finance_mcp.edgar.supplier_extractor import (
     SupplierRelationship,
     _clamp,
 )
-from finance_mcp.edgar.graph_updater import UpdateResult
 from mcp_server.schemas import ToolResponse
-
 
 # ---------------------------------------------------------------------------
 # edgar_client — pure helpers (no I/O)
@@ -495,7 +494,7 @@ class TestUpdateGraphFromFiling:
             MockGC.return_value.__exit__ = MagicMock(return_value=False)
 
             rel = self._make_rel(rel_type="supplier")
-            result = await update_graph_from_filing("AAPL", [rel])
+            await update_graph_from_filing("AAPL", [rel])
 
         # Find the MERGE edge call
         merge_calls = [r for r in runs if "MERGE (a)-[r:DEPENDS_ON]->(b)" in r["query"]]
@@ -670,7 +669,6 @@ class TestHandleEdgarRefresh:
     @pytest.mark.asyncio
     async def test_successful_refresh_returns_correct_fields(self):
         from mcp_server.invoke_handlers.edgar_refresh import handle_edgar_refresh
-        from finance_mcp.edgar.graph_updater import UpdateResult
 
         update = UpdateResult(
             ticker="AAPL",

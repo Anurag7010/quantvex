@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from mcp_server.invoke_handlers.multi_agent_analysis import handle_multi_agent_analysis
 from mcp_server.schemas import ToolResponse
 from mcp_server.server import app
-from mcp_server.invoke_handlers.multi_agent_analysis import handle_multi_agent_analysis
 
 API_KEY = "dev_key_change_in_production"
 

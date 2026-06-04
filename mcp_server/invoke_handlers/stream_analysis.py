@@ -8,11 +8,11 @@ import json
 import re
 from typing import AsyncIterator, Optional
 
-from finance_mcp.reasoning.bull_agent import run_bull_agent
 from finance_mcp.reasoning.bear_agent import run_bear_agent
+from finance_mcp.reasoning.bull_agent import run_bull_agent
 from finance_mcp.reasoning.judge_agent import run_judge_agent
+from finance_mcp.reasoning.orchestrator import _extract_ticker, _fallback_case, _generate_rebuttal
 from finance_mcp.reasoning.schemas import AgentInput, AgentOutput
-from finance_mcp.reasoning.orchestrator import _generate_rebuttal, _fallback_case, _extract_ticker
 from finance_mcp.verdict_history.tracker import record_verdict
 from mcp_server.config import get_settings
 from mcp_server.utils.logging import get_logger

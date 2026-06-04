@@ -31,11 +31,11 @@ from dataclasses import dataclass, field
 from typing import List
 
 from finance_mcp.graph.client import (
-    GraphClient,
+    AGENT_PASSWORD,
+    AGENT_USER,
     DEFAULT_HOST,
     DEFAULT_PORT,
-    AGENT_USER,
-    AGENT_PASSWORD,
+    GraphClient,
 )
 from finance_mcp.news.event_parser import ParsedEvent
 

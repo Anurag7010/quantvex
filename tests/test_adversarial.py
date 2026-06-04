@@ -11,20 +11,15 @@ Tests cover:
 """
 from __future__ import annotations
 
-import asyncio
-import os
 import sqlite3
-import tempfile
 import uuid
-from typing import Any, Dict
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
-import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from finance_mcp.reasoning.schemas import AgentInput, AgentOutput, JudgeVerdict
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -179,7 +174,15 @@ class TestBearAgentTargetedAttack:
         assert any(claim in sig for sig in result.signals)
 
     @pytest.mark.asyncio
-    async def test_confidence_boosted_when_targeting(self):
+    async def test_attack_target_in_metadata_not_confidence(self):
+        """Attack target is recorded in metadata for narrative purposes only.
+
+        The bear no longer receives free confidence for targeting the bull's
+        weakest claim — it must earn signal-backed confidence the same way the
+        bull does.  This test verifies the new contract: attack_target is set
+        in metadata, but confidence is identical whether or not a bull_thesis
+        is provided (all other signals equal).
+        """
         from finance_mcp.reasoning.bear_agent import run_bear_agent
         bull = _make_bull_output(weakest_claim="some weak claim")
         agent_input = AgentInput(query="AAPL risk", ticker="AAPL")
@@ -190,7 +193,10 @@ class TestBearAgentTargetedAttack:
             mock_q.return_value = mock_ti.return_value = {"success": False}
             result_with = await run_bear_agent(agent_input, bull_thesis=bull)
             result_without = await run_bear_agent(agent_input, bull_thesis=None)
-        assert result_with.confidence > result_without.confidence
+        # Attack target recorded but confidence is the same — no free boost
+        assert result_with.metadata.get("attack_target") == "some weak claim"
+        assert result_without.metadata.get("attack_target") is None
+        assert result_with.confidence == result_without.confidence
 
 
 # ---------------------------------------------------------------------------
@@ -336,7 +342,7 @@ class TestGenerateRebuttal:
 
 class TestVerdictDB:
     def test_initialize_db_creates_table(self, tmp_path):
-        from finance_mcp.verdict_history.db import initialize_db, get_connection
+        from finance_mcp.verdict_history.db import get_connection, initialize_db
         db_path = str(tmp_path / "test.db")
         initialize_db(db_path)
         conn = get_connection(db_path)
@@ -353,7 +359,7 @@ class TestVerdictDB:
         initialize_db(db_path)  # Should not raise
 
     def test_get_connection_returns_row_factory(self, tmp_path):
-        from finance_mcp.verdict_history.db import initialize_db, get_connection
+        from finance_mcp.verdict_history.db import get_connection, initialize_db
         db_path = str(tmp_path / "test.db")
         initialize_db(db_path)
         conn = get_connection(db_path)
@@ -361,7 +367,7 @@ class TestVerdictDB:
         conn.close()
 
     def test_table_has_expected_columns(self, tmp_path):
-        from finance_mcp.verdict_history.db import initialize_db, get_connection
+        from finance_mcp.verdict_history.db import get_connection, initialize_db
         db_path = str(tmp_path / "test.db")
         initialize_db(db_path)
         conn = get_connection(db_path)
@@ -397,7 +403,7 @@ class TestVerdictTracker:
 
     @pytest.mark.asyncio
     async def test_record_verdict_stores_row(self, tmp_path):
-        from finance_mcp.verdict_history.db import initialize_db, get_connection
+        from finance_mcp.verdict_history.db import get_connection, initialize_db
         from finance_mcp.verdict_history.tracker import record_verdict
         db_path = str(tmp_path / "test.db")
         initialize_db(db_path)
@@ -417,7 +423,7 @@ class TestVerdictTracker:
 
     @pytest.mark.asyncio
     async def test_record_verdict_normalises_ticker(self, tmp_path):
-        from finance_mcp.verdict_history.db import initialize_db, get_connection
+        from finance_mcp.verdict_history.db import get_connection, initialize_db
         from finance_mcp.verdict_history.tracker import record_verdict
         db_path = str(tmp_path / "test.db")
         initialize_db(db_path)
@@ -482,16 +488,16 @@ class TestVerdictAccuracy:
         conn.close()
 
     def test_empty_db_returns_empty_dict(self, tmp_path):
-        from finance_mcp.verdict_history.db import initialize_db
         from finance_mcp.verdict_history.accuracy import compute_accuracy_stats
+        from finance_mcp.verdict_history.db import initialize_db
         db_path = str(tmp_path / "test.db")
         initialize_db(db_path)
         stats = compute_accuracy_stats(db_path)
         assert stats == {}
 
     def test_single_verdict_appears_in_stats(self, tmp_path):
-        from finance_mcp.verdict_history.db import initialize_db
         from finance_mcp.verdict_history.accuracy import compute_accuracy_stats
+        from finance_mcp.verdict_history.db import initialize_db
         db_path = str(tmp_path / "test.db")
         initialize_db(db_path)
         self._seed(db_path, [{
@@ -506,8 +512,8 @@ class TestVerdictAccuracy:
         assert stats["BUY"]["5d"] is None  # pending
 
     def test_accuracy_computed_when_resolved(self, tmp_path):
-        from finance_mcp.verdict_history.db import initialize_db
         from finance_mcp.verdict_history.accuracy import compute_accuracy_stats
+        from finance_mcp.verdict_history.db import initialize_db
         db_path = str(tmp_path / "test.db")
         initialize_db(db_path)
         self._seed(db_path, [

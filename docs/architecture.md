@@ -725,3 +725,9 @@ The response includes a `components` map with per-service `{status, error?}` obj
 | S&P 500 top-50 supply chain relationships | 64 DEPENDS_ON edges, 53 REQUIRES edges | Manually curated from public earnings calls, 10-K filings, and supply chain research reports |
 | Historical disruption events | 8 pre-seeded events (Taiwan Strait, OPEC, Suez, Rare Earth, Lithium, AI chips, Neon gas, EU gas) | Publicly documented market events; severity ratings are system-defined |
 | SEC EDGAR 10-K filings | Live supplier/customer relationship extraction | U.S. Securities and Exchange Commission public EDGAR database |
+
+## Visual Diagram Placeholder
+
+Export the architecture from Excalidraw or draw.io and save as `docs/architecture.png`.
+The diagram should match the ASCII architecture in README.md.
+Then replace this file with the exported PNG.

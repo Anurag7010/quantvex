@@ -1,5 +1,6 @@
 from functools import lru_cache
-from typing import Any, Optional
+from typing import Any, Optional, Union
+
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
@@ -46,7 +47,10 @@ class Settings(BaseSettings):
     groq_base_url: str = Field(default="https://api.groq.com/openai/v1", env="GROQ_BASE_URL")
     groq_model: str = Field(default="llama-3.3-70b-versatile", env="GROQ_MODEL")
     usd_inr_rate: Optional[float] = Field(default=89.94, env="USD_INR_RATE")
-    allowed_origins: list[str] = Field(
+    # pydantic-settings 2.x treats list[str] as complex and demands JSON from env.
+    # Union[list[str], str] bypasses that path, letting the validator handle
+    # both JSON arrays and comma-separated strings transparently.
+    allowed_origins: Union[list[str], str] = Field(
         default=["http://localhost:5173", "http://localhost:3000"],
         env="ALLOWED_ORIGINS",
     )
@@ -55,7 +59,12 @@ class Settings(BaseSettings):
     @classmethod
     def parse_allowed_origins(cls, value: Any) -> list[str]:
         if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
+            stripped = value.strip()
+            if stripped.startswith("["):
+                import json
+
+                return json.loads(stripped)
+            return [origin.strip() for origin in stripped.split(",") if origin.strip()]
         return value
 
     class Config:

@@ -1,14 +1,14 @@
 """
 Redis Client for Hot Cache and Streams
 """
-import redis
-import json
-import time
-from typing import Optional, Dict, Any, List
 from datetime import datetime
+from typing import List, Optional
+
+import redis
+
 from mcp_server.config import get_settings
+from mcp_server.schemas import DataSource, QuoteData, StreamTick
 from mcp_server.utils.logging import get_logger
-from mcp_server.schemas import QuoteData, StreamTick, DataSource
 
 logger = get_logger(__name__)
 

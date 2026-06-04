@@ -10,9 +10,9 @@ from openai import AsyncOpenAI
 
 from mcp_server.config import get_settings
 from mcp_server.invoke_handlers import handle_quote_latest, handle_trace_impact
+from mcp_server.invoke_handlers.edgar_refresh import handle_edgar_refresh
 from mcp_server.invoke_handlers.multi_agent_analysis import handle_multi_agent_analysis
 from mcp_server.invoke_handlers.news_analysis import handle_news_analysis
-from mcp_server.invoke_handlers.edgar_refresh import handle_edgar_refresh
 from mcp_server.utils.logging import get_logger
 
 logger = get_logger(__name__)

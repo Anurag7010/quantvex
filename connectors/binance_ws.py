@@ -5,13 +5,15 @@ Free real-time crypto trades streaming
 import asyncio
 import json
 import uuid
-from typing import Optional, Dict, Callable, Set
 from datetime import datetime
+from typing import Callable, Dict, Optional, Set
+
 import websockets
-from mcp_server.config import get_settings
-from mcp_server.utils.logging import get_logger
-from mcp_server.schemas import StreamTick, DataSource
+
 from cache.redis_client import get_redis_client
+from mcp_server.config import get_settings
+from mcp_server.schemas import DataSource, StreamTick
+from mcp_server.utils.logging import get_logger
 
 logger = get_logger(__name__)
 

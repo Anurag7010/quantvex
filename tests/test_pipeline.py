@@ -7,16 +7,15 @@ pipeline logic can be verified without network or database access.
 
 from __future__ import annotations
 
-import asyncio
-import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from finance_mcp.ingestion.event_ingestor import IngestResult
 from finance_mcp.ingestion.pipeline import PipelineResult, run_news_ingestion_pipeline
 from finance_mcp.news.event_parser import ImpactedEntity, ParsedEvent
 from finance_mcp.news.news_client import NewsArticle
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

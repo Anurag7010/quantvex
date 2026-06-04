@@ -7,7 +7,9 @@ Provides:
 """
 from __future__ import annotations
 
+import os
 import socket
+
 import pytest
 
 
@@ -22,9 +24,13 @@ def _memgraph_reachable() -> bool:
 
 _MEMGRAPH_UP = _memgraph_reachable()
 
+_TEST_API_KEY = "dev_key_change_in_production"
+
 
 @pytest.fixture(autouse=True)
-def _clear_settings_cache():
+def _clear_settings_cache(monkeypatch):
+    """Reset settings cache and pin MCP_API_KEY so tests are isolated from .env."""
+    monkeypatch.setenv("MCP_API_KEY", _TEST_API_KEY)
     from mcp_server.config import get_settings
     get_settings.cache_clear()
     yield

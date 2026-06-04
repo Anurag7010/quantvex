@@ -1,10 +1,11 @@
 """
 Unified Financial Data Schema
 """
-from pydantic import BaseModel, Field
-from typing import Optional
 from datetime import datetime
 from enum import Enum
+from typing import Optional
+
+from pydantic import BaseModel, Field
 
 
 class DataSource(str, Enum):

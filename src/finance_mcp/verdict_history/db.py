@@ -17,9 +17,8 @@ verdicts table:
   correct_30d   INTEGER           — same for 30-day window
 """
 
-import sqlite3
 import os
-from typing import Optional
+import sqlite3
 
 _DEFAULT_DB_PATH: str = os.environ.get("VERDICT_DB_PATH", "verdicts.db")
 
